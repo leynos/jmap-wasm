@@ -1,7 +1,9 @@
-.PHONY: help all clean test build release lint fmt check-fmt markdownlint nixie
+.PHONY: help all clean test build release lint fmt check-fmt markdownlint nixie wasm package e2e
 
-
-TARGET ?= libimap_wasm.rlib
+PACKAGE_NAME ?= imap-tool
+WASM_TARGET ?= wasm32-wasip2
+WASM_ARTIFACT ?= target/$(WASM_TARGET)/release/imap_tool.wasm
+DIST_DIR ?= dist/$(PACKAGE_NAME)
 
 CARGO ?= cargo
 BUILD_JOBS ?=
@@ -12,8 +14,8 @@ TEST_FLAGS ?= $(CARGO_FLAGS)
 MDLINT ?= markdownlint-cli2
 NIXIE ?= nixie
 
-build: target/debug/$(TARGET) ## Build debug binary
-release: target/release/$(TARGET) ## Build release binary
+build: target/debug/lib$(subst -,_,$(PACKAGE_NAME)).rlib ## Build debug library
+release: target/release/lib$(subst -,_,$(PACKAGE_NAME)).rlib ## Build release library
 
 all: check-fmt lint test ## Perform a comprehensive check of code
 
@@ -23,8 +25,23 @@ clean: ## Remove build artifacts
 test: ## Run tests with warnings treated as errors
 	RUSTFLAGS="$(RUST_FLAGS)" $(CARGO) test $(TEST_FLAGS) $(BUILD_JOBS)
 
-target/%/$(TARGET): ## Build binary in debug or release mode
+target/%/lib$(subst -,_,$(PACKAGE_NAME)).rlib: ## Build library in debug or release mode
 	$(CARGO) build $(BUILD_JOBS) $(if $(findstring release,$(@)),--release)
+
+wasm: $(WASM_ARTIFACT) ## Build the release Wasm component
+
+$(WASM_ARTIFACT):
+	$(CARGO) rustc --lib --target $(WASM_TARGET) --release --crate-type=cdylib
+
+package: wasm ## Package the Wasm artifact and capabilities sidecar
+	rm -rf $(DIST_DIR)
+	mkdir -p $(DIST_DIR)
+	cp $(WASM_ARTIFACT) $(DIST_DIR)/imap-tool.wasm
+	cp imap-tool.capabilities.json $(DIST_DIR)/
+	cp docs/users-guide.md $(DIST_DIR)/README.md
+
+e2e: wasm ## Run GreenMail-backed end-to-end tests
+	$(CARGO) test -- --ignored --nocapture
 
 lint: ## Run Clippy with warnings denied
 	RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" $(CARGO) doc --no-deps

@@ -1,3 +1,4 @@
 target/
+dist/
 **/*.rs.bk
 writing-web-assembly-tools-for-ironclaw.md
