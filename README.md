@@ -102,6 +102,11 @@ What each target does:
   creates `dist/jmap-tool-wasm32-wasip2.tar.gz`.
 - `make e2e` builds the Wasm artefact and runs the ignored end-to-end checks.
 
+Tagged releases are also automated. Pushing a `v*.*.*` tag runs the GitHub
+release workflow, rebuilds the package bundle, generates changelog notes from
+Git history, and publishes `dist/jmap-tool-wasm32-wasip2.tar.gz` on the GitHub
+release.
+
 For normal development, the usual flow is:
 
 ```bash
