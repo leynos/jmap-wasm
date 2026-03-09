@@ -115,6 +115,7 @@ The sidecar file `jmap-tool.capabilities.json` requests:
 - `http` access for `GET` and `POST` to the configured JMAP host
 - a bearer-token credential mapping for `jmap_token`
 - secret-name checks for `jmap_token` and `jmap_*`
+- setup UI for the required `jmap_token` secret
 
 The checked-in sidecar is an example:
 
@@ -140,10 +141,18 @@ The checked-in sidecar is an example:
 Before installing the tool, update the HTTP allowlist and credential
 `host_patterns` so they match your provider's hostname.
 
+After installing the extension, use Ironclaw's `Configure` action to store the
+`jmap_token` secret for the account this tool should use.
+
 `auth_secret_name` in the request is a preflight check only. The tool calls
 `secret_exists` before making HTTP requests so it can fail fast if the named
 secret is missing. The actual bearer token is still injected by the host
-according to the capabilities file.
+according to the capabilities file. Using `"auth_secret_name":"jmap_token"` is
+recommended even after setup because it produces a clear error if the token is
+missing.
+
+The JMAP base URL is not part of Ironclaw's persistent setup UI for Wasm tools.
+Keep passing `base_url` in each request.
 
 ## Request schema
 

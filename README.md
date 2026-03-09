@@ -62,6 +62,11 @@ The `.tar.gz` bundle is the installable artefact for the Ironclaw web UI. It
 contains `jmap-tool.wasm`, `jmap-tool.capabilities.json`, and `README.md` at
 the archive root.
 
+After installing the extension in Ironclaw, use `Configure` to store the
+`jmap_token` secret for the account you want this tool to use. The base URL is
+still supplied per request because Ironclaw's Wasm tool model does not expose a
+general persistent non-secret config surface.
+
 The core request payload looks like this:
 
 ```json
@@ -75,7 +80,9 @@ The core request payload looks like this:
 Ironclaw passes that JSON string to the tool's `execute` method via the shared
 `sandboxed-tool` interface. The host injects the bearer token according to
 `jmap-tool.capabilities.json`; the tool only checks that the named secret
-exists before making the HTTP request.
+exists before making the HTTP request. Using `"auth_secret_name":"jmap_token"`
+is recommended because it fails fast if the extension has not been configured
+yet.
 
 ______________________________________________________________________
 

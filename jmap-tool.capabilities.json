@@ -32,10 +32,15 @@
   "auth": {
     "secret_name": "jmap_token",
     "display_name": "JMAP",
-    "instructions": "Store a bearer token for your JMAP provider and update the HTTP allowlist host patterns to match your service.",
+    "instructions": "Use Configure to store a bearer token for your JMAP provider, then update the HTTP allowlist host patterns to match your service.",
     "env_var": "JMAP_TOKEN"
   },
-  "config": {
-    "default_limit": 20
+  "setup": {
+    "required_secrets": [
+      {
+        "name": "jmap_token",
+        "prompt": "Enter the bearer token for your JMAP account"
+      }
+    ]
   }
 }

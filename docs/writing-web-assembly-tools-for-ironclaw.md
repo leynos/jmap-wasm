@@ -200,6 +200,11 @@ In `jmap-tool`, `auth_secret_name` is only a preflight check. The tool calls
 still arrives via host capability configuration in
 [`jmap-tool.capabilities.json`](../jmap-tool.capabilities.json).
 
+For persistent setup in the current Ironclaw UI, `jmap-tool` uses
+`setup.required_secrets` for `jmap_token`. That works because the host can
+later inject the token into HTTP requests. It does not work for values like
+`base_url`, because the guest has no API for reading secret contents back.
+
 If you find yourself wanting to pass passwords, tokens, or API keys directly in
 tool parameters, you are fighting the platform.
 
@@ -356,6 +361,7 @@ declares:
 - HTTP allowlist entries
 - a bearer-token credential mapping
 - secret-name checks
+- setup metadata for the `Configure` flow
 - rate limits
 - timeout defaults
 - auth metadata for the host UI
@@ -382,6 +388,13 @@ The sidecar credential mapping is a host instruction:
 - "inject this secret into outbound HTTP requests for matching hosts"
 
 Those are complementary. Neither replaces the other.
+
+One more practical scar: there is no general persistent non-secret config
+surface for Wasm tools today. If you need the user to supply something that the
+guest must later read, such as a service base URL, `setup.required_secrets` is
+the wrong mechanism because the guest cannot read secret values. That is why
+`jmap-tool` keeps `base_url` in normal request parameters while storing only
+the token in setup.
 
 ## Packaging Is Stricter Than The Examples Suggest
 
