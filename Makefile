@@ -39,9 +39,7 @@ test: unit bdd e2e ## Run all tests with warnings treated as errors
 target/%/$(TARGET): ## Build library in debug or release mode
 	$(CARGO) build $(BUILD_JOBS) $(if $(findstring release,$(@)),--release) --lib
 
-wasm: $(WASM_ARTIFACT) ## Build the release Wasm component
-
-$(WASM_ARTIFACT):
+wasm: ## Build the release Wasm component
 	$(CARGO) rustc --lib --target $(WASM_TARGET) --release --crate-type=cdylib
 
 package: wasm ## Package the Wasm artifact, sidecar, and Ironclaw tar.gz bundle

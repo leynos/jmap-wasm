@@ -4,8 +4,8 @@
 
 `jmap-tool` is an Ironclaw-compatible WebAssembly tool that talks to mail
 servers over JMAP using Ironclaw's host-provided HTTP bridge. It implements the
-the `near:agent` `sandboxed-tool` world pinned in this repository to WIT
-`0.2.0`, and exposes four actions:
+`near:agent` `sandboxed-tool` world pinned in this repository to WIT `0.3.0`,
+and exposes four actions:
 
 - `list_mailboxes`
 - `list_messages`
@@ -90,6 +90,10 @@ make package
 ```sh
 cargo rustc --lib --target wasm32-wasip2 --release --crate-type=cdylib
 ```
+
+The target intentionally rebuilds the Wasm artefact rather than trusting an
+existing file in `target/`. That avoids stale component binaries when the
+vendored WIT contract changes.
 
 `make package` copies the built component, the capabilities sidecar, and this
 guide into `dist/jmap-tool/`, then creates

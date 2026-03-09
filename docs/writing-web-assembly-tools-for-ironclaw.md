@@ -2,28 +2,37 @@
 
 ## The Guide I Wish I Had Before Building `jmap-tool`
 
-This document is based on actually building and packaging
+This document is based on actually building, testing, and packaging
 [`jmap-tool`](../README.md) for Ironclaw, not on an idealized reading of the
-WIT alone. The short version is:
+WIT alone.
+
+The short version is:
 
 - Ironclaw Wasm tools are a good fit for HTTP-shaped integrations.
 - They are a poor fit for guest-managed TCP protocols.
 - `schema()` and `description()` matter more than you may think.
+- The capabilities sidecar is part of the product, not auxiliary metadata.
 - Packaging is stricter than "ship a `.wasm` somehow".
 - Honest end-to-end testing needs more than one layer.
 
-If you are writing a new tool, this guide should save you from several rounds
-of avoidable confusion.
+If you are writing a new tool in this repository, this guide should save you
+from several rounds of avoidable confusion.
 
 ## Read This First
 
-Three facts shape almost every design decision:
+This document is now meant to do two jobs at once:
 
-1. The public tool boundary is the `sandboxed-tool` world in
-   [`wit/tool.wit`](../wit/tool.wit).
-2. The host capability surface is small. In practice, the important outbound
-   capability is `http-request`.
-3. The Ironclaw web UI expects a `.tar.gz` bundle, not a loose directory.
+- record the durable lessons from building `jmap-tool`
+- act as the migration guide for moving `jmap-tool` to WIT `0.3.0`
+
+Four facts shape almost every design decision in this repo:
+
+1. The authoritative tool contract is the vendored
+   [`wit/tool.wit`](../wit/tool.wit) file in this repository.
+2. Ironclaw now requires tools to target `package near:agent@0.3.0;`.
+3. The shipped sidecar must declare `wit_version: "0.3.0"`.
+4. The Ironclaw web UI expects a named `.tar.gz` bundle, not a loose build
+   directory.
 
 That means the happy path for plugin authors is:
 
@@ -36,19 +45,63 @@ That also means some tempting designs do not fit:
 
 - IMAP over raw TCP from inside the Wasm guest
 - SMTP from inside the Wasm guest
-- any crate that insists on owning its own `reqwest::Client` when you need to
-  route requests through Ironclaw's host HTTP bridge
+- any crate that insists on owning its own HTTP client when you need to route
+  requests through Ironclaw's host HTTP bridge
 
-One more practical warning: the host rejects Wasm tools whose declared
-`wit_version` does not match the host's supported minor version. This
-repository is currently pinned to `0.2.0` for compatibility with the deployed
-Ironclaw host used during validation, even though newer Ironclaw source trees
-may already have moved on.
+The discarded `docs/writing-web-assembly-tools-for-ironclaw-new.md` draft was
+right about one important thing: Ironclaw has moved to WIT `0.3.0`. What it did
+not need for this repository was the broader channel-specific material. The
+useful move is to keep the tool-focused guidance here and adopt the corrected
+WIT target.
+
+## Versioning Rules That Matter In Practice
+
+There are three separate version surfaces that are easy to conflate:
+
+1. the WIT package version in [`wit/tool.wit`](../wit/tool.wit)
+2. the declared `wit_version` in
+   [`jmap-tool.capabilities.json`](../jmap-tool.capabilities.json)
+3. the tool's own release `version` in
+   [`jmap-tool.capabilities.json`](../jmap-tool.capabilities.json)
+
+For the migration this repository now needs:
+
+- the WIT package version must be `0.3.0`
+- the sidecar `wit_version` must be `0.3.0`
+- the sidecar `version` remains the tool release version and does not need to
+  match the WIT minor version
+
+The local WIT file currently begins with:
+
+```wit
+package near:agent@0.3.0;
+```
+
+The shipped sidecar currently declares:
+
+```json
+{
+  "version": "0.2.0",
+  "wit_version": "0.3.0"
+}
+```
+
+The important correction is that `version` and `wit_version` are not the same
+field. Ironclaw's own current examples keep tool `version` on their normal
+release track while bumping `wit_version` to `0.3.0`.
+
+The practical rule is simple:
+
+- keep the vendored WIT and sidecar `wit_version` in lockstep
+- do not force the tool's own release `version` to match the WIT version unless
+  you are making a real tool release change too
+- treat a WIT mismatch as a packaging defect, not as harmless metadata
 
 ## What The Tool Boundary Actually Is
 
-Ironclaw tools export three things and import a handful of host functions. The
-authoritative contract in this repository is [`wit/tool.wit`](../wit/tool.wit).
+Ironclaw tools export three things and import a small handful of host
+functions. The authoritative contract in this repository is
+[`wit/tool.wit`](../wit/tool.wit).
 
 At the tool boundary, you export:
 
@@ -77,10 +130,10 @@ wrong abstractions first and then unwind them later.
 
 ### `params` Is A JSON String, Not A Record
 
-This is the first sharp edge that catches people. Your inner request shape is
-your own JSON object, but Ironclaw hands it to you as `request.params: string`.
+Your inner request shape is your own JSON object, but Ironclaw hands it to you
+as `request.params: string`.
 
-In `jmap-tool`, the guest entry point is tiny:
+In `jmap-tool`, the guest entry point is intentionally tiny:
 
 ```rust
 wit_bindgen::generate!({
@@ -130,8 +183,6 @@ to a discoverable method contract.
 
 ### There Is No Dedicated "List Supported Methods" API
 
-This is another missing detail that matters in practice.
-
 There is no separate outward function like `list_methods()` or `capabilities()`
 for business actions. Discovery happens through:
 
@@ -142,15 +193,27 @@ If you want the host, agent, or an LLM to understand what your tool can do,
 your schema needs a crisp `action` enum and your description needs to say when
 the tool should be used.
 
-For `jmap-tool`, the supported actions are surfaced through the schema:
+### Prefer One Tagged `action` Request
 
-- `list_mailboxes`
-- `list_messages`
-- `get_message`
-- `mark_seen`
+The cleanest outward contract we found was a single request object with a
+required `action` field.
 
-That pattern is consistent with the neighbouring Ironclaw tools in
-`../ironclaw/tools-src/`.
+That lets you keep `execute()` stable while evolving specific operations behind
+that tag. For `jmap-tool`, the shared request fields are:
+
+- `action`
+- `base_url`
+- `account_id`
+- `auth_secret_name`
+- `timeout_ms`
+
+Action-specific fields then layer on top.
+
+This buys you:
+
+- easier schema discovery
+- one stable entry point
+- a simpler LLM prompt surface
 
 ## Capability Reality Beats ABI Theory
 
@@ -176,26 +239,30 @@ That entire flow lives comfortably inside
 IMAP required guest-managed TCP, which did not fit the tool model and did not
 work under the runtime we had available.
 
-### "Defined In WIT" Does Not Guarantee "Works In The Host"
+### `tool-invoke` Exists In WIT, But Do Not Design Around It First
 
 `tool-invoke` is present in the world, but that does not mean you should depend
-on it today.
+on it as your main composition story.
 
-In the current Ironclaw host implementation, the Wasm wrapper still returns:
+This repository's Wasm e2e host stub still returns:
 
-`Tool invocation from WASM tools is not yet supported`
+`tool-invoke is not available in this e2e host`
 
-That matters because it changes how you structure composition:
+Treat that as a warning sign. If composition is essential, verify your target
+Ironclaw host first instead of assuming the WIT import is enough.
 
-- do not design your plugin around calling sibling tools
+The design guidance is:
+
+- do not build your tool around calling sibling tools by default
 - do not hide essential functionality behind a second tool
-- keep one Wasm tool self-contained unless you have verified host support
+- keep one Wasm tool self-contained unless host support is proven where you
+  plan to deploy it
 
 If you need composition, push it up into the agent or into a host-side service.
 
 ### Secrets Are Host-Injected, Not Guest-Readable
 
-This is the right security model, but the guide should say it more bluntly:
+This is the right security model, but the guide should say it bluntly:
 
 - the guest can check whether a secret exists
 - the guest cannot read the secret value
@@ -203,7 +270,7 @@ This is the right security model, but the guide should say it more bluntly:
 
 In `jmap-tool`, `auth_secret_name` is only a preflight check. The tool calls
 `secret_exists()` so it can fail fast with a useful error, but the bearer token
-still arrives via host capability configuration in
+itself arrives via host capability configuration in
 [`jmap-tool.capabilities.json`](../jmap-tool.capabilities.json).
 
 For persistent setup in the current Ironclaw UI, `jmap-tool` uses
@@ -214,12 +281,11 @@ later inject the token into HTTP requests. It does not work for values like
 If you find yourself wanting to pass passwords, tokens, or API keys directly in
 tool parameters, you are fighting the platform.
 
-### There Is No General Persistent Tool Config Surface
+### There Is No General Persistent Non-Secret Config Surface
 
-This is the other constraint that deserves to be stated plainly.
-
-For Wasm tools, Ironclaw does not currently expose a first-class extension
-configuration schema for arbitrary persistent settings such as:
+For the host stack this repo targets, Wasm tools do not currently have a
+first-class extension configuration schema for arbitrary persistent settings
+such as:
 
 - service base URLs
 - default mailbox names
@@ -247,9 +313,6 @@ That split is not stylistic. It follows from the host API:
 - the host can inject a secret into HTTP requests
 - the guest cannot read a secret value back
 
-So if the guest must actually inspect a value later, `setup.required_secrets`
-is the wrong mechanism unless the host is the thing that will consume it.
-
 As a rule of thumb:
 
 - use `setup.required_secrets` for credentials and other host-consumed secrets
@@ -259,7 +322,7 @@ As a rule of thumb:
 
 ## Pick Libraries That Respect The Host Transport Boundary
 
-This was the most important implementation lesson.
+This was one of the most important implementation lessons.
 
 ### Transport-Agnostic Codecs Fit Better Than Full Clients
 
@@ -287,10 +350,10 @@ That split is reusable and publishable. It is also easier to test honestly.
 
 The `jmap-client` investigation ended with a no.
 
-The problem was not "this crate is bad". The problem was that the tool needed
-to route HTTP through Ironclaw's `host.http-request`, while `jmap-client`
-constructs and owns its own HTTP client flow. That is the wrong direction of
-control for an Ironclaw Wasm tool.
+The problem was not that the crate was "bad". The problem was that the tool
+needed to route HTTP through Ironclaw's `host.http-request`, while
+`jmap-client` constructs and owns its own HTTP client flow. That is the wrong
+direction of control for an Ironclaw Wasm tool.
 
 A good rule for Ironclaw plugin authors is:
 
@@ -302,8 +365,8 @@ non-invasive way, assume it is the wrong building block for a Wasm plugin.
 
 ## Recommended Repository Shape
 
-The neighbouring Ironclaw tools are mostly single-crate examples. That shape is
-fine for simple tools, but `jmap-tool` needed a slightly richer layout:
+`jmap-tool` ended up needing a slightly richer layout than the smallest
+single-crate examples:
 
 ```text
 .
@@ -337,9 +400,8 @@ That keeps the Wasm-facing code small and the protocol surface reusable.
 
 ### Keep A Local Copy Of `tool.wit`
 
-The bundled Ironclaw examples import `../../wit/tool.wit` from the main
-Ironclaw repository. This repository keeps its own copy in
-[`wit/tool.wit`](../wit/tool.wit).
+This repository keeps its own copy in [`wit/tool.wit`](../wit/tool.wit) rather
+than depending on a cross-repo relative path into an Ironclaw checkout.
 
 That trade-off is worth it if you want:
 
@@ -350,31 +412,7 @@ That trade-off is worth it if you want:
 The downside is drift. If Ironclaw changes the world, you must reconcile your
 copy deliberately.
 
-## Schema Design Advice From The JMAP Tool
-
-### Prefer One Tagged `action` Object
-
-The cleanest outward contract we found was a single request object with a
-required `action` field.
-
-That let us keep `execute()` stable while evolving specific operations behind
-that tag.
-
-For `jmap-tool`, the shared request fields are:
-
-- `action`
-- `base_url`
-- `account_id`
-- `auth_secret_name`
-- `timeout_ms`
-
-Action-specific fields then layer on top.
-
-This buys you:
-
-- easier schema discovery
-- one stable entry point
-- a simpler LLM prompt surface
+## Schema And Description Design Advice
 
 ### Defaults Matter
 
@@ -401,8 +439,8 @@ deployment model in one sentence.
 
 ## Capabilities Sidecars Are Part Of The Product
 
-Treat the capabilities JSON as first-class shipping artefact, not auxiliary
-metadata.
+Treat the capabilities JSON as a first-class shipping artefact, not as
+auxiliary metadata.
 
 In [`jmap-tool.capabilities.json`](../jmap-tool.capabilities.json), the tool
 declares:
@@ -421,8 +459,8 @@ The checked-in sidecar uses `mail.example.com` as an example. That is useful
 for the repository, but a real deployment must replace it with the actual JMAP
 provider hostname.
 
-This sounds obvious, but it is an easy way to ship a plugin that installs clean
-and fails at runtime.
+This sounds obvious, but it is an easy way to ship a plugin that installs
+cleanly and fails at runtime.
 
 ### Secret Checks And Credential Injection Are Separate Concerns
 
@@ -438,51 +476,29 @@ The sidecar credential mapping is a host instruction:
 
 Those are complementary. Neither replaces the other.
 
-One more practical scar: there is no general persistent non-secret config
-surface for Wasm tools today. If you need the user to supply something that the
-guest must later read, such as a service base URL, `setup.required_secrets` is
-the wrong mechanism because the guest cannot read secret values. That is why
-`jmap-tool` keeps `base_url` in normal request parameters while storing only
-the token in setup.
-
 ## Packaging Is Stricter Than The Examples Suggest
 
 This was one of the bigger surprises.
 
 ### The Web UI Wants A `.tar.gz` Bundle
 
-The initial packaging target in this repository produced a directory with the
-Wasm file and sidecar. That was not enough for the Ironclaw web UI.
-
 The practical installer contract is:
 
 - build a `.tar.gz`
 - include `{name}.wasm`
 - include `{name}.capabilities.json`
-- keep the names aligned with the extension name Ironclaw will install
+- keep the basenames aligned with the extension name Ironclaw will install
 
-`jmap-tool` now packages:
+`jmap-tool` currently packages:
 
 - `dist/jmap-tool/jmap-tool.wasm`
 - `dist/jmap-tool/jmap-tool.capabilities.json`
 - `dist/jmap-tool/README.md`
 - `dist/jmap-tool-wasm32-wasip2.tar.gz`
 
-The bundle is produced by [`Makefile`](../Makefile):
-
-```make
-package: wasm
-	rm -rf $(DIST_DIR)
-	mkdir -p $(DIST_DIR)
-	cp $(WASM_ARTIFACT) $(DIST_DIR)/jmap-tool.wasm
-	cp jmap-tool.capabilities.json $(DIST_DIR)/
-	cp docs/users-guide.md $(DIST_DIR)/README.md
-	rm -f $(BUNDLE_ARTIFACT)
-	tar -C $(DIST_DIR) -czf $(BUNDLE_ARTIFACT) \
-		jmap-tool.wasm \
-		jmap-tool.capabilities.json \
-		README.md
-```
+The installer-critical files are the Wasm binary and the capabilities sidecar.
+The packaged `README.md` is a convenience for inspection, not the core install
+contract.
 
 ### Bundle Naming And Install Naming Must Match
 
@@ -500,15 +516,16 @@ Do not assume Ironclaw will infer or rewrite those names for you.
 
 ### A Directory Is Useful, But The Tarball Is The Deliverable
 
-Keeping `dist/jmap-tool/` is still useful for inspection and local debugging,
-but the thing users actually need for the web UI is the tarball.
+Keeping `dist/jmap-tool/` is useful for inspection and local debugging, but the
+thing users actually need for the web UI is the tarball left behind by
+[`make package`](../Makefile).
 
-If your `make package` target does not leave behind a directly installable
-archive, it is incomplete.
+If your packaging target does not leave behind a directly installable archive,
+it is incomplete.
 
 ## Testing: Prove The Right Thing At The Right Layer
 
-This is where the old guide most needed scars.
+This is where the original guide needed the most scars.
 
 ### One "E2E Test" Is Not Enough
 
@@ -584,7 +601,8 @@ the transport boundary.
 
 ## Build Targets That Future You Will Thank You For
 
-The current `Makefile` ended up with a target set that feels about right:
+The current [`Makefile`](../Makefile) ended up with a target set that feels
+about right:
 
 - `make check-fmt`
 - `make lint`
@@ -592,12 +610,20 @@ The current `Makefile` ended up with a target set that feels about right:
 - `make wasm`
 - `make package`
 - `make e2e`
+- `make markdownlint`
+- `make nixie`
 
 That split matters.
 
 `make all` should stay fast enough for normal development. Wasm packaging and
 ignored e2e tests should be opt-in, deterministic steps, not hidden side
-effects of some giant default target.
+effects of some giant default target. Documentation gates should stay explicit
+too, because tool authoring docs are part of the shipped experience.
+
+One migration-specific lesson is worth capturing here: `make wasm` should
+rebuild the component rather than quietly reusing a stale artefact from
+`target/`. WIT version bumps are exactly the kind of change that can leave an
+old component on disk with the wrong imported package version.
 
 ## What I Would Tell A New Plugin Author To Do
 
@@ -605,10 +631,10 @@ If you are starting from zero, do this in order:
 
 1. Verify that your external protocol can be expressed through
    `host.http-request`.
-2. Copy or vendor the current `tool.wit` locally so you have a pinned contract.
+2. Keep the vendored `tool.wit` and the sidecar `wit_version` in lockstep.
 3. Keep `src/lib.rs` tiny and put real logic in normal modules.
 4. Design one request object with a required `action`.
-5. Write `schema()` and `description()` before you think they are "finished".
+5. Write `schema()` and `description()` before you think they are finished.
 6. Treat the capabilities sidecar as part of the shipped plugin.
 7. Add `make wasm`, `make package`, and `make e2e` early.
 8. Validate the built `.wasm` as a component, not just as a Rust build output.
@@ -621,12 +647,25 @@ If you are starting from zero, do this in order:
   `wasm32-wasip2`.
 - `schema()` returns a string, so schema drift is easy if you do not keep docs
   and tests near it.
-- `tool-invoke` exists in WIT but is not yet a reliable design primitive in the
-  current host.
+- `tool-invoke` exists in WIT, but you should not treat it as a reliable design
+  primitive until you verify host support where you deploy.
 - Packaging is name-sensitive. The installer expects matching basenames.
 - A valid Wasm component test is not the same thing as a useful protocol test.
 - Mock servers are product dependencies. Treat their gaps as part of your
   design surface.
+- `version` and `wit_version` are different knobs. Bump the WIT contract when
+  Ironclaw requires it, and bump the tool release version when the tool itself
+  ships a new release.
+
+## Related Repo Docs
+
+- [README.md](../README.md)
+- [docs/users-guide.md](./users-guide.md)
+- [jmap-tool.capabilities.json](../jmap-tool.capabilities.json)
+- [wit/tool.wit](../wit/tool.wit)
+- [tests/jmap_e2e.rs](../tests/jmap_e2e.rs)
+- [src/e2e_tests.rs](../src/e2e_tests.rs)
+- [Makefile](../Makefile)
 
 ## Final Recommendation
 
@@ -635,7 +674,7 @@ Ironclaw Wasm tools are at their best when they are:
 - narrow in purpose
 - HTTP-native
 - honest about their capability boundary
-- explicit about packaging
+- explicit about versioning and packaging
 - tested at both the component and protocol layers
 
 If you stay inside that shape, the platform is pleasant enough.
