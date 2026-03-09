@@ -39,6 +39,12 @@ That also means some tempting designs do not fit:
 - any crate that insists on owning its own `reqwest::Client` when you need to
   route requests through Ironclaw's host HTTP bridge
 
+One more practical warning: the host rejects Wasm tools whose declared
+`wit_version` does not match the host's supported minor version. This
+repository is currently pinned to `0.2.0` for compatibility with the deployed
+Ironclaw host used during validation, even though newer Ironclaw source trees
+may already have moved on.
+
 ## What The Tool Boundary Actually Is
 
 Ironclaw tools export three things and import a handful of host functions. The

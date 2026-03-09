@@ -4,7 +4,8 @@
 
 `jmap-tool` is an Ironclaw-compatible WebAssembly tool that talks to mail
 servers over JMAP using Ironclaw's host-provided HTTP bridge. It implements the
-`near:agent/tool@0.3.0` `sandboxed-tool` world and exposes four actions:
+the `near:agent` `sandboxed-tool` world pinned in this repository to WIT
+`0.2.0`, and exposes four actions:
 
 - `list_mailboxes`
 - `list_messages`
