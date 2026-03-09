@@ -1797,6 +1797,8 @@ dependencies = [
  "anyhow",
  "axum",
  "bytes",
+ "camino",
+ "cap-std",
  "jmap-codec",
  "reqwest 0.12.28",
  "rstest",

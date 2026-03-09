@@ -11,6 +11,8 @@ mod service;
 
 #[cfg_attr(not(clippy), allow(missing_docs))]
 mod bindings {
+    //! Generated guest bindings for Ironclaw's sandboxed-tool world.
+
     wit_bindgen::generate!({
         path: "wit",
         world: "sandboxed-tool",

@@ -1,8 +1,10 @@
 //! End-to-end component checks for the built Wasm artifact.
 
-use std::{collections::HashSet, fs, path::PathBuf};
+use std::{collections::HashSet, io::Read as _};
 
 use anyhow::{Context, Result, anyhow, bail};
+use camino::Utf8PathBuf;
+use cap_std::{ambient_authority, fs::Dir};
 use wasmtime::{
     Config, Engine, Store,
     component::{Component, HasSelf, Linker, ResourceTable},
@@ -16,6 +18,8 @@ use wit_component::DecodedWasm;
     reason = "wasmtime bindgen expands generated arithmetic"
 )]
 mod bindings {
+    //! Generated host bindings used by the Wasmtime integration test.
+
     wasmtime::component::bindgen!({
         path: "wit",
         world: "sandboxed-tool",
@@ -136,25 +140,24 @@ fn wasm_component_exports_schema_description_and_executes_jmap_read_path() {
 }
 
 fn run_component_check() -> Result<()> {
-    let artifact = PathBuf::from(WASM_ARTIFACT);
-    let artifact_bytes = fs::read(&artifact).with_context(|| {
-        format!(
-            "failed to read Wasm artifact at '{}' - run `make wasm` first",
-            artifact.display()
-        )
+    let workspace_dir = Dir::open_ambient_dir(".", ambient_authority())
+        .context("failed to open workspace directory for Wasm artifact lookup")?;
+    let artifact = Utf8PathBuf::from(WASM_ARTIFACT);
+    let artifact_bytes = read_bytes(&workspace_dir, &artifact).with_context(|| {
+        format!("failed to read Wasm artifact at '{artifact}' - run `make wasm` first")
     })?;
     if !matches!(
         wit_component::decode(&artifact_bytes)?,
         DecodedWasm::Component(_, _)
     ) {
-        bail!("'{}' is not a Wasm component", artifact.display());
+        bail!("'{artifact}' is not a Wasm component");
     }
 
     let mut config = Config::new();
     config.wasm_component_model(true);
 
     let engine = Engine::new(&config)?;
-    let component = Component::from_file(&engine, &artifact)?;
+    let component = Component::from_file(&engine, artifact.as_std_path())?;
     let mut linker = Linker::new(&engine);
     wasmtime_wasi::p2::add_to_linker_sync(&mut linker)?;
     SandboxedTool::add_to_linker::<_, HasSelf<_>>(&mut linker, |state| state)?;
@@ -201,6 +204,16 @@ fn run_component_check() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn read_bytes(dir: &Dir, path: &Utf8PathBuf) -> Result<Vec<u8>> {
+    let mut file = dir
+        .open(path.as_std_path())
+        .with_context(|| format!("failed to open '{path}'"))?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)
+        .with_context(|| format!("failed to read '{path}'"))?;
+    Ok(bytes)
 }
 
 fn json_response(status: u16, body: &str) -> near::agent::host::HttpResponse {

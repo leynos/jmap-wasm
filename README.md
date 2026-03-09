@@ -102,8 +102,9 @@ make e2e
 What each target does:
 
 - `make check-fmt` verifies Rust formatting.
-- `make lint` runs Rustdoc generation and Clippy with warnings denied.
-- `make test` runs the workspace unit and behavioural tests.
+- `make lint` runs Rustdoc generation, Clippy, and Whitaker with warnings
+  denied.
+- `make test` runs the unit, behavioural, and end-to-end test targets.
 - `make wasm` builds the release Wasm component for `wasm32-wasip2`.
 - `make package` stages the installable files under `dist/jmap-tool/` and
   creates `dist/jmap-tool-wasm32-wasip2.tar.gz`.
@@ -120,7 +121,6 @@ For normal development, the usual flow is:
 make check-fmt
 make lint
 make test
-make package
 ```
 
 ______________________________________________________________________

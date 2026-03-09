@@ -75,7 +75,8 @@ make test
 ```
 
 These targets cover Rust formatting, Clippy, Rustdoc generation, unit tests,
-and the `rstest-bdd` behavioural scenarios.
+Whitaker linting, unit tests, the `rstest-bdd` behavioural scenarios, and the
+ignored end-to-end checks.
 
 ### Wasm build and packaging
 

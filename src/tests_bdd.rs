@@ -118,33 +118,38 @@ fn execution_succeeds(world: &ToolWorld) {
 
 #[then("the response contains mailbox {mailbox}")]
 fn response_contains_mailbox(world: &ToolWorld, mailbox: String) {
-    let output = world.output.as_ref().expect("output should be set");
+    assert!(world.output.is_some(), "output should be set");
+    let output = world.output.as_deref().unwrap_or("");
     assert!(output.contains(&mailbox));
 }
 
 #[then("the response contains subject {subject}")]
 fn response_contains_subject(world: &ToolWorld, subject: String) {
-    let output = world.output.as_ref().expect("output should be set");
+    assert!(world.output.is_some(), "output should be set");
+    let output = world.output.as_deref().unwrap_or("");
     assert!(output.contains(&subject));
 }
 
 #[then("the response contains body fragment {fragment}")]
 fn response_contains_body_fragment(world: &ToolWorld, fragment: String) {
-    let output = world.output.as_ref().expect("output should be set");
+    assert!(world.output.is_some(), "output should be set");
+    let output = world.output.as_deref().unwrap_or("");
     assert!(output.contains(&fragment));
 }
 
 #[then("the response marks the message as seen")]
 fn response_marks_message_seen(world: &ToolWorld) {
-    let output = world.output.as_ref().expect("output should be set");
+    assert!(world.output.is_some(), "output should be set");
+    let output = world.output.as_deref().unwrap_or("");
     assert!(output.contains(r#""seen":true"#));
     assert!(output.contains("$seen"));
 }
 
 #[then("the execution fails with {message}")]
 fn execution_fails(world: &ToolWorld, message: String) {
-    let error = world.error.as_ref().expect("error should be set");
-    assert_eq!(error.as_str(), message);
+    assert!(world.error.is_some(), "error should be set");
+    let error = world.error.as_deref().unwrap_or("");
+    assert_eq!(error, message);
 }
 
 #[scenario(

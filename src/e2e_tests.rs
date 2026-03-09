@@ -2,8 +2,6 @@
 
 use std::{
     collections::HashSet,
-    fs,
-    path::Path,
     thread,
     time::{Duration, Instant},
 };
@@ -11,6 +9,8 @@ use std::{
 use anyhow::{Context, Result, anyhow, bail};
 use axum::serve;
 use bytes::Bytes;
+use camino::{Utf8Path, Utf8PathBuf};
+use cap_std::{ambient_authority, fs::Dir};
 use reqwest::blocking::Client;
 use rusmes_jmap::{JmapServer, Session};
 use rusmes_proto::{HeaderMap, Mail, MailAddress, MessageBody, MimeMessage, Username};
@@ -26,8 +26,8 @@ const STORAGE_ROOT: &str = "/tmp/rusmes/mail";
 
 #[test]
 #[ignore = "requires the rusmes-jmap harness and network access"]
-fn native_jmap_service_talks_to_mock_server() {
-    run_rusmes_flow().expect("rusmes-jmap e2e should pass");
+fn native_jmap_service_talks_to_mock_server() -> Result<()> {
+    run_rusmes_flow()
 }
 
 fn run_rusmes_flow() -> Result<()> {
@@ -97,19 +97,25 @@ fn ensure_mailbox_present(
 }
 
 fn reset_storage_root() -> Result<()> {
-    let storage_path = Path::new(STORAGE_ROOT);
-    if storage_path.exists() {
-        fs::remove_dir_all(storage_path)
-            .with_context(|| format!("failed to clear '{}'", storage_path.display()))?;
-    }
+    let root_dir = Dir::open_ambient_dir("/", ambient_authority())
+        .context("failed to open ambient root for rusmes-jmap cleanup")?;
+    let storage_path = Utf8Path::new(STORAGE_ROOT);
+    let relative_path = storage_path
+        .strip_prefix("/")
+        .with_context(|| format!("storage root '{storage_path}' must be an absolute path"))?;
 
-    Ok(())
+    match root_dir.remove_dir_all(relative_path.as_std_path()) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error).with_context(|| format!("failed to clear '{storage_path}'")),
+    }
 }
 
 fn seed_messages() -> Result<SeededMessage> {
+    let storage_root = Utf8PathBuf::from(STORAGE_ROOT);
     let runtime = Runtime::new().context("failed to build Tokio runtime for seeding")?;
     runtime.block_on(async {
-        let backend = FilesystemBackend::new(Path::new(STORAGE_ROOT).to_path_buf());
+        let backend = FilesystemBackend::new(storage_root.as_std_path().to_path_buf());
         let mailbox_store = backend.mailbox_store();
         let message_store = backend.message_store();
 
