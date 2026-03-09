@@ -24,7 +24,7 @@ mod bindings {
 
 use bindings::{SandboxedTool, exports, near};
 
-const WASM_ARTIFACT: &str = "target/wasm32-wasip2/release/imap_tool.wasm";
+const WASM_ARTIFACT: &str = "target/wasm32-wasip2/release/jmap_tool.wasm";
 
 #[derive(Default)]
 struct TestState {
@@ -58,13 +58,62 @@ impl near::agent::host::Host for TestState {
 
     fn http_request(
         &mut self,
-        _method: String,
-        _url: String,
+        method: String,
+        url: String,
         _headers_json: String,
         _body: Option<Vec<u8>>,
         _timeout_ms: Option<u32>,
     ) -> std::result::Result<near::agent::host::HttpResponse, String> {
-        Err("http-request is not available in this e2e host".to_owned())
+        if method == "GET" && url.ends_with("/.well-known/jmap") {
+            return Ok(json_response(
+                200,
+                r#"{
+                    "capabilities": {
+                        "urn:ietf:params:jmap:core": {},
+                        "urn:ietf:params:jmap:mail": {}
+                    },
+                    "accounts": {
+                        "acc-1": {}
+                    },
+                    "primaryAccounts": {
+                        "urn:ietf:params:jmap:mail": "acc-1"
+                    },
+                    "username": "user@example.com",
+                    "apiUrl": "https://mail.example.com/jmap",
+                    "downloadUrl": "https://mail.example.com/download/{accountId}/{blobId}/{name}",
+                    "uploadUrl": "https://mail.example.com/upload/{accountId}",
+                    "state": "s-1"
+                }"#,
+            ));
+        }
+
+        if method == "POST" && url == "https://mail.example.com/jmap" {
+            return Ok(json_response(
+                200,
+                r#"{
+                    "methodResponses": [[
+                        "Mailbox/get",
+                        {
+                            "accountId": "acc-1",
+                            "state": "mbx-1",
+                            "list": [{
+                                "id": "mbx-1",
+                                "name": "Inbox",
+                                "role": "inbox",
+                                "isSubscribed": true,
+                                "totalEmails": 1,
+                                "unreadEmails": 1
+                            }],
+                            "notFound": []
+                        },
+                        "call-0"
+                    ]],
+                    "sessionState": "s-1"
+                }"#,
+            ));
+        }
+
+        Err(format!("unexpected request: {method} {url}"))
     }
 
     fn tool_invoke(
@@ -82,7 +131,7 @@ impl near::agent::host::Host for TestState {
 
 #[test]
 #[ignore = "requires a built Wasm artifact"]
-fn wasm_component_exports_schema_and_description() {
+fn wasm_component_exports_schema_description_and_executes_jmap_read_path() {
     run_component_check().expect("component e2e should pass");
 }
 
@@ -114,36 +163,50 @@ fn run_component_check() -> Result<()> {
         &engine,
         TestState {
             table: ResourceTable::new(),
-            wasi: WasiCtxBuilder::new().inherit_network().build(),
+            wasi: WasiCtxBuilder::new().build(),
             logs: Vec::new(),
-            secrets: HashSet::from(["imap_password".to_owned()]),
+            secrets: HashSet::from(["jmap_token".to_owned()]),
         },
     );
     let bindings = SandboxedTool::instantiate(&mut store, &component, &linker)?;
     let tool = bindings.near_agent_tool();
 
     let schema = tool.call_schema(&mut store)?;
-    if !schema.contains("\"list_mailboxes\"") {
-        return Err(anyhow!("schema did not mention list_mailboxes"));
+    if !schema.contains("\"base_url\"") {
+        return Err(anyhow!("schema did not mention base_url"));
     }
 
     let description = tool.call_description(&mut store)?;
-    if !description.contains("imap-next") {
-        return Err(anyhow!("description did not mention imap-next"));
+    if !description.contains("host HTTP bridge") {
+        return Err(anyhow!("description did not mention the host HTTP bridge"));
     }
 
     let response = tool.call_execute(
         &mut store,
         &exports::near::agent::tool::Request {
-            params: "{".to_owned(),
+            params: r#"{
+                "action":"list_mailboxes",
+                "base_url":"https://mail.example.com",
+                "auth_secret_name":"jmap_token"
+            }"#
+            .to_owned(),
             context: None,
         },
     )?;
-    if response.error.is_none() {
-        return Err(anyhow!(
-            "invalid JSON request should have produced an error response"
-        ));
+    let output = response
+        .output
+        .ok_or_else(|| anyhow!("JMAP list_mailboxes should have produced output"))?;
+    if !output.contains("\"Inbox\"") {
+        return Err(anyhow!("successful output did not contain Inbox"));
     }
 
     Ok(())
+}
+
+fn json_response(status: u16, body: &str) -> near::agent::host::HttpResponse {
+    near::agent::host::HttpResponse {
+        status,
+        headers_json: "{\"content-type\":\"application/json\"}".to_owned(),
+        body: body.as_bytes().to_vec(),
+    }
 }

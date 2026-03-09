@@ -1,8 +1,8 @@
 .PHONY: help all clean test build release lint fmt check-fmt markdownlint nixie wasm package e2e
 
-PACKAGE_NAME ?= imap-tool
+PACKAGE_NAME ?= jmap-tool
 WASM_TARGET ?= wasm32-wasip2
-WASM_ARTIFACT ?= target/$(WASM_TARGET)/release/imap_tool.wasm
+WASM_ARTIFACT ?= target/$(WASM_TARGET)/release/jmap_tool.wasm
 DIST_DIR ?= dist/$(PACKAGE_NAME)
 
 CARGO ?= cargo
@@ -36,11 +36,11 @@ $(WASM_ARTIFACT):
 package: wasm ## Package the Wasm artifact and capabilities sidecar
 	rm -rf $(DIST_DIR)
 	mkdir -p $(DIST_DIR)
-	cp $(WASM_ARTIFACT) $(DIST_DIR)/imap-tool.wasm
-	cp imap-tool.capabilities.json $(DIST_DIR)/
+	cp $(WASM_ARTIFACT) $(DIST_DIR)/jmap-tool.wasm
+	cp jmap-tool.capabilities.json $(DIST_DIR)/
 	cp docs/users-guide.md $(DIST_DIR)/README.md
 
-e2e: wasm ## Run GreenMail-backed end-to-end tests
+e2e: wasm ## Run rusmes-jmap-backed end-to-end tests
 	$(CARGO) test -- --ignored --nocapture
 
 lint: ## Run Clippy with warnings denied

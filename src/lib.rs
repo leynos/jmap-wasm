@@ -1,10 +1,11 @@
-//! Ironclaw-compatible IMAP tool implemented as a WebAssembly component.
+//! Ironclaw-compatible JMAP tool implemented as a WebAssembly component.
 
 mod actions;
 mod errors;
 mod host;
+mod jmap_transport;
+mod mappers;
 mod outputs;
-mod protocol;
 mod schema;
 mod service;
 
@@ -17,18 +18,18 @@ mod bindings {
 }
 
 use crate::bindings::exports::near::agent::tool::Guest;
-use actions::ImapAction;
+use actions::JmapAction;
 use bindings::{export, exports};
 use errors::ToolError;
 use host::{Host, WasmHost};
-use service::{ImapService, NetworkImapService};
+use service::{JmapService, NetworkJmapService};
 
-struct ImapTool;
+struct JmapTool;
 
-impl Guest for ImapTool {
+impl Guest for JmapTool {
     fn execute(req: exports::near::agent::tool::Request) -> exports::near::agent::tool::Response {
         let host = WasmHost;
-        let service = NetworkImapService;
+        let service = NetworkJmapService;
 
         match execute_with(&req.params, &host, &service) {
             Ok(output) => exports::near::agent::tool::Response {
@@ -51,21 +52,25 @@ impl Guest for ImapTool {
     }
 }
 
-fn execute_with<H: Host, S: ImapService>(
+fn execute_with<H: Host, S: JmapService>(
     params: &str,
     host: &H,
     service: &S,
 ) -> Result<String, ToolError> {
-    let action = ImapAction::parse(params)?;
+    let action = JmapAction::parse(params)?;
     action.verify_secret(host)?;
-    host.log_info(&format!("Executing IMAP action '{}'", action.action_name()));
-    let output = action.execute(service)?;
+    host.log_info(&format!("Executing JMAP action '{}'", action.action_name()));
+    let output = action.execute(host, service)?;
     serde_json::to_string(&output).map_err(ToolError::SerializeOutput)
 }
 
-export!(ImapTool);
+export!(JmapTool);
 
 #[cfg(test)]
 mod e2e_tests;
 #[cfg(test)]
+mod test_support;
+#[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_bdd;

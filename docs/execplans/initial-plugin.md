@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETED
 
 ## Purpose / big picture
 
@@ -416,9 +416,25 @@ Observable success criteria:
 - [x] 2026-03-09 10:36 GMT: User required the JMAP protocol implementation to
   live in a separate reusable crate so it can be published independently as a
   transport-agnostic JMAP codec.
-- [ ] 2026-03-09 10:18 GMT: Remove the IMAP-specific implementation and replace
-  it with a host-HTTP JMAP implementation, a reusable codec crate, and revised
-  tests, packaging, and user documentation.
+- [x] 2026-03-09 11:04 GMT: Replaced the IMAP-specific implementation with a
+  host-HTTP JMAP tool, moved the protocol envelopes and mail method models into
+  a reusable `crates/jmap-codec` workspace crate, and rewired the main tool to
+  consume that crate.
+- [x] 2026-03-09 11:21 GMT: Replaced the old IMAP packaging artefacts with
+  `jmap-tool` naming, rewrote the capabilities sidecar for host-mediated HTTP
+  bearer auth, and changed the e2e harness from GreenMail to `rusmes-jmap` plus
+  Wasmtime component checks.
+- [x] 2026-03-09 11:32 GMT: Expanded `rstest-bdd` coverage to include
+  `list_messages`, `get_message`, and `mark_seen`, and rewrote
+  `docs/users-guide.md` to the actual JMAP request schema, capabilities, and
+  local test flow.
+- [x] 2026-03-09 11:33 GMT: Replay the full repository gates on the final JMAP
+  tree and commit the implementation once they pass.
+- [x] 2026-03-09 12:24 GMT: Replayed `make check-fmt`, `make lint`,
+  `make test`, `make markdownlint`, `make nixie`, `make wasm`, `make package`,
+  and `make e2e` on the final JMAP tree. The rusmes-backed e2e now passes with
+  an honest scope of mailbox listing, seeded-message ID retrieval, and the
+  current `Email/set` limitation.
 
 ## Surprises & Discoveries
 
@@ -472,6 +488,25 @@ Observable success criteria:
 - The implementation is no longer allowed to stay a single crate. The user now
   requires one reusable transport-agnostic JMAP codec crate plus the Wasm tool
   crate that consumes it.
+- The `rusmes-jmap` mock is good enough for honest read-path e2e coverage, but
+  its incomplete mutation support means `mark_seen` is only fully validated in
+  unit and behavioural tests today; the native e2e asserts the current
+  `notImplemented` response instead.
+- In this repository's `rusmes-jmap` harness, `Email/query` still does not
+  surface the seeded filesystem-backed message set reliably, even when the test
+  uses the real seeded mailbox UUID. The native e2e therefore validates
+  `list_mailboxes`, direct `get_message`, and the current `Email/set`
+  limitation, while `list_messages` remains covered by unit and behavioural
+  tests.
+- In the same harness, `Email/get` can round-trip the seeded message ID but
+  does not currently populate the richer subject and text-body projection
+  reliably. The native e2e therefore asserts retrieval by seeded ID rather than
+  full message rendering, while the richer output mapping stays covered by unit
+  and behavioural tests.
+- The Wasm component e2e does not need a live JMAP server. A deterministic host
+  stub returning session discovery and `Mailbox/get` JSON is enough to prove
+  the component exports the right schema and can execute the JMAP read path
+  through the imported Ironclaw HTTP bridge.
 
 ## Decision Log
 
@@ -518,6 +553,20 @@ Observable success criteria:
   rather than trying to salvage guest-side IMAP sockets. Rationale: Ironclaw
   exposes only host-mediated HTTP to Wasm tools, and the current runtime here
   still rejects guest TCP.
+- Decision: Reject `jmap-client` and `libjmap` for the tool transport layer
+  and implement a narrow local JMAP transport on top of the host HTTP import.
+  Rationale: `jmap-client` owns `reqwest` internally, while `libjmap` expects
+  an async Tower/Hyper service returning `hyper::body::Incoming`; neither is a
+  clean fit for Ironclaw's synchronous imported HTTP ABI.
+- Decision: Split reusable protocol code into `crates/jmap-codec` and keep the
+  root crate focused on Ironclaw bindings, host transport, and action
+  orchestration. Rationale: The user explicitly wants a publishable
+  transport-agnostic codec crate and the split also keeps the Wasm crate's
+  files smaller and easier to test.
+- Decision: Keep `rusmes-jmap` as the current e2e server despite its mutation
+  gaps, while documenting Cyrus as a future fallback. Rationale: `rusmes-jmap`
+  is sufficient for local read-path validation and keeps `make e2e` lightweight
+  and deterministic enough for this repository today.
 
 - Decision: Treat `jmap-client` as investigated and rejected for this Wasm tool.
   Rationale: The crate constructs and owns `reqwest` clients internally, so it

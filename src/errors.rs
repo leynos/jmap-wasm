@@ -1,6 +1,4 @@
-//! Typed errors returned by the IMAP tool.
-
-use std::io;
+//! Typed errors returned by the JMAP tool.
 
 use thiserror::Error;
 
@@ -16,18 +14,26 @@ pub(crate) enum ToolError {
     /// A named secret was requested for existence checks but was not present.
     #[error("Required secret '{0}' is not configured")]
     MissingSecret(String),
-    /// The IMAP server closed the connection unexpectedly.
-    #[error("IMAP server closed the connection")]
-    ConnectionClosed,
-    /// Plain TCP I/O failed.
-    #[error("I/O failure: {0}")]
-    Io(#[source] io::Error),
-    /// The IMAP protocol parser rejected the traffic.
-    #[error("IMAP protocol error: {0}")]
-    Protocol(String),
-    /// The IMAP server rejected a command.
-    #[error("IMAP server rejected the command: {0}")]
-    Server(String),
+    /// The host HTTP bridge rejected the request.
+    #[error("Host HTTP request failed: {0}")]
+    HostHttp(String),
+    /// The host returned headers that were not valid JSON.
+    #[error("Host returned invalid response headers JSON: {0}")]
+    InvalidHeadersJson(#[source] serde_json::Error),
+    /// The JMAP server returned a non-successful HTTP status.
+    #[error("JMAP server returned HTTP {status}: {body}")]
+    UnexpectedHttpStatus {
+        /// HTTP status code.
+        status: u16,
+        /// Response body decoded lossily for diagnostics.
+        body: String,
+    },
+    /// The response body was not valid JSON.
+    #[error("JMAP server returned invalid JSON: {0}")]
+    InvalidJsonResponse(#[source] serde_json::Error),
+    /// The response was syntactically valid JSON but not the shape required.
+    #[error("JMAP server returned an unexpected response: {0}")]
+    InvalidResponse(String),
     /// The component could not serialize the success payload.
     #[error("Failed to serialize tool output: {0}")]
     SerializeOutput(#[source] serde_json::Error),

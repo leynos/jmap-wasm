@@ -1,0 +1,41 @@
+{
+  "version": "0.2.0",
+  "wit_version": "0.3.0",
+  "capabilities": {
+    "http": {
+      "allowlist": [
+        {
+          "host": "mail.example.com",
+          "path_prefix": "/",
+          "methods": ["GET", "POST"]
+        }
+      ],
+      "credentials": {
+        "jmap_token": {
+          "secret_name": "jmap_token",
+          "location": {
+            "type": "bearer"
+          },
+          "host_patterns": ["mail.example.com"]
+        }
+      },
+      "rate_limit": {
+        "requests_per_minute": 60,
+        "requests_per_hour": 3600
+      },
+      "timeout_secs": 30
+    },
+    "secrets": {
+      "allowed_names": ["jmap_token", "jmap_*"]
+    }
+  },
+  "auth": {
+    "secret_name": "jmap_token",
+    "display_name": "JMAP",
+    "instructions": "Store a bearer token for your JMAP provider and update the HTTP allowlist host patterns to match your service.",
+    "env_var": "JMAP_TOKEN"
+  },
+  "config": {
+    "default_limit": 20
+  }
+}

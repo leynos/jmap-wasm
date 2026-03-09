@@ -1,37 +1,45 @@
-//! Service abstractions for IMAP actions.
+//! Service abstractions for JMAP-backed mail actions.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+
+use jmap_codec::{
+    core::MAIL_CAPABILITY,
+    mail::{
+        EmailGetArguments, EmailQueryArguments, EmailQueryFilter, EmailSetArguments,
+        MailboxGetArguments,
+    },
+};
+use serde_json::json;
 
 use crate::{
     errors::ToolError,
     host::Host,
-    outputs::{
-        GetMessageOutput, ListMailboxesOutput, ListMessagesOutput, MailboxInfo, MarkSeenOutput,
-        MessageDetail, MessageSummary,
+    jmap_transport,
+    mappers::{
+        map_mailbox, map_message_detail, map_message_summary, message_properties,
+        message_properties_with_body, truthy_map_keys,
     },
-    protocol::ImapSession,
+    outputs::{GetMessageOutput, ListMailboxesOutput, ListMessagesOutput, MarkSeenOutput},
 };
 
-/// Shared IMAP connection configuration.
+/// Shared JMAP configuration.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
-pub(crate) struct ConnectionConfig {
-    /// IMAP hostname.
-    pub(crate) host: String,
-    /// Plain IMAP TCP port.
-    #[serde(default = "default_port")]
-    pub(crate) port: u16,
-    /// LOGIN username.
-    pub(crate) username: String,
-    /// LOGIN password.
-    pub(crate) password: String,
-    /// Optional secret name used only for `secret_exists` preflight.
-    pub(crate) password_secret_name: Option<String>,
+pub(crate) struct JmapConfig {
+    /// Base URL of the JMAP server.
+    pub(crate) base_url: String,
+    /// Optional account ID override.
+    pub(crate) account_id: Option<String>,
+    /// Optional auth secret name used for `secret_exists` preflight.
+    pub(crate) auth_secret_name: Option<String>,
+    /// Per-request timeout for the host HTTP bridge.
+    #[serde(default = "default_timeout_ms")]
+    pub(crate) timeout_ms: u32,
 }
 
-impl ConnectionConfig {
+impl JmapConfig {
     /// Verify that any optional secret preflight passes.
     pub(crate) fn verify_secret<H: Host>(&self, host: &H) -> Result<(), ToolError> {
-        if let Some(secret_name) = &self.password_secret_name
+        if let Some(secret_name) = &self.auth_secret_name
             && !host.secret_exists(secret_name)
         {
             return Err(ToolError::MissingSecret(secret_name.clone()));
@@ -44,25 +52,26 @@ impl ConnectionConfig {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ListMessagesRequest {
     /// Connection details.
-    pub(crate) connection: ConnectionConfig,
-    /// Mailbox to query.
-    pub(crate) mailbox: String,
-    /// IMAP sequence set.
-    pub(crate) sequence_set: String,
+    pub(crate) config: JmapConfig,
+    /// Optional mailbox ID filter.
+    pub(crate) mailbox_id: Option<String>,
+    /// Optional mailbox name filter.
+    pub(crate) mailbox_name: Option<String>,
+    /// Maximum number of messages to return.
+    pub(crate) limit: u32,
+    /// Query start position.
+    pub(crate) position: u32,
 }
 
 impl ListMessagesRequest {
-    /// Construct a list request while filling defaults.
-    pub(crate) fn new(
-        connection: ConnectionConfig,
-        mailbox: Option<String>,
-        sequence_set: Option<String>,
-    ) -> Self {
-        Self {
-            connection,
-            mailbox: mailbox.unwrap_or_else(default_mailbox),
-            sequence_set: sequence_set.unwrap_or_else(default_sequence_set),
+    /// Validate that the mailbox selectors are coherent.
+    pub(crate) fn validate(&self) -> Result<(), ToolError> {
+        if self.mailbox_id.is_some() && self.mailbox_name.is_some() {
+            return Err(ToolError::InvalidRequest(
+                "Provide either mailbox_id or mailbox_name, not both".to_owned(),
+            ));
         }
+        Ok(())
     }
 }
 
@@ -70,25 +79,15 @@ impl ListMessagesRequest {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct GetMessageRequest {
     /// Connection details.
-    pub(crate) connection: ConnectionConfig,
-    /// Mailbox to query.
-    pub(crate) mailbox: String,
-    /// Message sequence number.
-    pub(crate) sequence: u32,
+    pub(crate) config: JmapConfig,
+    /// Message ID.
+    pub(crate) email_id: String,
 }
 
 impl GetMessageRequest {
-    /// Construct a fetch request while filling defaults.
-    pub(crate) fn new(
-        connection: ConnectionConfig,
-        mailbox: Option<String>,
-        sequence: u32,
-    ) -> Self {
-        Self {
-            connection,
-            mailbox: mailbox.unwrap_or_else(default_mailbox),
-            sequence,
-        }
+    /// Construct a fetch request.
+    pub(crate) const fn new(config: JmapConfig, email_id: String) -> Self {
+        Self { config, email_id }
     }
 }
 
@@ -96,201 +95,287 @@ impl GetMessageRequest {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct MarkSeenRequest {
     /// Connection details.
-    pub(crate) connection: ConnectionConfig,
-    /// Mailbox to query.
-    pub(crate) mailbox: String,
-    /// Message sequence number.
-    pub(crate) sequence: u32,
+    pub(crate) config: JmapConfig,
+    /// Message ID.
+    pub(crate) email_id: String,
 }
 
 impl MarkSeenRequest {
-    /// Construct a flag-update request while filling defaults.
-    pub(crate) fn new(
-        connection: ConnectionConfig,
-        mailbox: Option<String>,
-        sequence: u32,
-    ) -> Self {
-        Self {
-            connection,
-            mailbox: mailbox.unwrap_or_else(default_mailbox),
-            sequence,
-        }
+    /// Construct a flag-update request.
+    pub(crate) const fn new(config: JmapConfig, email_id: String) -> Self {
+        Self { config, email_id }
     }
 }
 
-/// Transport-agnostic IMAP operations used by request execution.
-pub(crate) trait ImapService {
+/// Transport-agnostic JMAP operations used by request execution.
+pub(crate) trait JmapService {
     /// List the mailboxes visible to the logged-in account.
-    fn list_mailboxes(
+    fn list_mailboxes<H: Host>(
         &self,
-        connection: &ConnectionConfig,
+        host: &H,
+        config: &JmapConfig,
     ) -> Result<ListMailboxesOutput, ToolError>;
 
     /// List messages from one mailbox.
-    fn list_messages(&self, request: &ListMessagesRequest)
-    -> Result<ListMessagesOutput, ToolError>;
+    fn list_messages<H: Host>(
+        &self,
+        host: &H,
+        request: &ListMessagesRequest,
+    ) -> Result<ListMessagesOutput, ToolError>;
 
     /// Fetch one full message.
-    fn get_message(&self, request: &GetMessageRequest) -> Result<GetMessageOutput, ToolError>;
+    fn get_message<H: Host>(
+        &self,
+        host: &H,
+        request: &GetMessageRequest,
+    ) -> Result<GetMessageOutput, ToolError>;
 
     /// Mark one message as seen.
-    fn mark_seen(&self, request: &MarkSeenRequest) -> Result<MarkSeenOutput, ToolError>;
+    fn mark_seen<H: Host>(
+        &self,
+        host: &H,
+        request: &MarkSeenRequest,
+    ) -> Result<MarkSeenOutput, ToolError>;
 }
 
-/// Production IMAP implementation backed by `imap-next`.
-pub(crate) struct NetworkImapService;
+/// Production JMAP implementation backed by the Ironclaw host HTTP bridge.
+pub(crate) struct NetworkJmapService;
 
-impl ImapService for NetworkImapService {
-    fn list_mailboxes(
+impl JmapService for NetworkJmapService {
+    fn list_mailboxes<H: Host>(
         &self,
-        connection: &ConnectionConfig,
+        host: &H,
+        config: &JmapConfig,
     ) -> Result<ListMailboxesOutput, ToolError> {
-        let mut session = ImapSession::connect(connection)?;
-        let mailboxes = session
-            .list_mailboxes()?
-            .into_iter()
-            .map(MailboxInfoModel::into_output)
-            .collect();
+        let session = jmap_transport::discover_session(host, config)?;
+        let account_id = resolve_account_id(config, &session)?;
+        let response = jmap_transport::mailbox_get(
+            host,
+            config,
+            &session.api_url,
+            MailboxGetArguments {
+                account_id: account_id.clone(),
+                ids: None,
+                properties: None,
+            },
+        )?;
 
-        Ok(ListMailboxesOutput { mailboxes })
+        Ok(ListMailboxesOutput {
+            account_id,
+            mailboxes: response.list.into_iter().map(map_mailbox).collect(),
+        })
     }
 
-    fn list_messages(
+    fn list_messages<H: Host>(
         &self,
+        host: &H,
         request: &ListMessagesRequest,
     ) -> Result<ListMessagesOutput, ToolError> {
-        let mut session = ImapSession::connect(&request.connection)?;
-        session.select_mailbox(&request.mailbox)?;
-        let messages = session
-            .list_messages(&request.sequence_set)?
+        let session = jmap_transport::discover_session(host, &request.config)?;
+        let account_id = resolve_account_id(&request.config, &session)?;
+        let context = ServiceContext {
+            config: &request.config,
+            api_url: &session.api_url,
+            account_id: &account_id,
+        };
+        let mailbox_id = resolve_mailbox_id(host, &context, request)?;
+
+        let query = jmap_transport::email_query(
+            host,
+            context.config,
+            context.api_url,
+            EmailQueryArguments {
+                account_id: account_id.clone(),
+                filter: mailbox_id.clone().map(|id| EmailQueryFilter {
+                    in_mailbox: Some(id),
+                }),
+                position: Some(request.position),
+                limit: Some(request.limit),
+                calculate_total: Some(true),
+            },
+        )?;
+
+        let messages = if query.ids.is_empty() {
+            Vec::new()
+        } else {
+            jmap_transport::email_get(
+                host,
+                &request.config,
+                &session.api_url,
+                EmailGetArguments {
+                    account_id: account_id.clone(),
+                    ids: query.ids,
+                    properties: Some(message_properties()),
+                },
+            )?
+            .list
             .into_iter()
-            .map(MessageSummaryModel::into_output)
-            .collect();
+            .map(map_message_summary)
+            .collect()
+        };
 
         Ok(ListMessagesOutput {
-            mailbox: request.mailbox.clone(),
+            account_id,
+            mailbox_id,
+            position: query.position,
+            total: query.total,
             messages,
         })
     }
 
-    fn get_message(&self, request: &GetMessageRequest) -> Result<GetMessageOutput, ToolError> {
-        let mut session = ImapSession::connect(&request.connection)?;
-        session.select_mailbox(&request.mailbox)?;
-        let message = session.get_message(request.sequence)?.into_output();
+    fn get_message<H: Host>(
+        &self,
+        host: &H,
+        request: &GetMessageRequest,
+    ) -> Result<GetMessageOutput, ToolError> {
+        let session = jmap_transport::discover_session(host, &request.config)?;
+        let account_id = resolve_account_id(&request.config, &session)?;
+        let response = jmap_transport::email_get(
+            host,
+            &request.config,
+            &session.api_url,
+            EmailGetArguments {
+                account_id: account_id.clone(),
+                ids: vec![request.email_id.clone()],
+                properties: Some(message_properties_with_body()),
+            },
+        )?;
+        let message = response.list.into_iter().next().ok_or_else(|| {
+            ToolError::InvalidRequest(format!("Email '{}' was not found", request.email_id))
+        })?;
 
         Ok(GetMessageOutput {
-            mailbox: request.mailbox.clone(),
-            message,
+            account_id,
+            message: map_message_detail(message),
         })
     }
 
-    fn mark_seen(&self, request: &MarkSeenRequest) -> Result<MarkSeenOutput, ToolError> {
-        let mut session = ImapSession::connect(&request.connection)?;
-        session.select_mailbox(&request.mailbox)?;
-        let seen = session.mark_seen(request.sequence)?;
+    fn mark_seen<H: Host>(
+        &self,
+        host: &H,
+        request: &MarkSeenRequest,
+    ) -> Result<MarkSeenOutput, ToolError> {
+        let session = jmap_transport::discover_session(host, &request.config)?;
+        let account_id = resolve_account_id(&request.config, &session)?;
+        let current = jmap_transport::email_get(
+            host,
+            &request.config,
+            &session.api_url,
+            EmailGetArguments {
+                account_id: account_id.clone(),
+                ids: vec![request.email_id.clone()],
+                properties: Some(vec!["keywords".to_owned()]),
+            },
+        )?
+        .list
+        .into_iter()
+        .next()
+        .ok_or_else(|| {
+            ToolError::InvalidRequest(format!("Email '{}' was not found", request.email_id))
+        })?;
+        let mut keywords = current.keywords;
+        let _ = keywords.insert("$seen".to_owned(), true);
 
+        let mut updates = std::collections::HashMap::new();
+        let _ = updates.insert(
+            request.email_id.clone(),
+            json!({
+                "keywords": keywords,
+            }),
+        );
+
+        let response = jmap_transport::email_set(
+            host,
+            &request.config,
+            &session.api_url,
+            EmailSetArguments {
+                account_id: account_id.clone(),
+                if_in_state: None,
+                update: Some(updates),
+            },
+        )?;
+        if let Some(not_updated) = response.not_updated
+            && let Some(error) = not_updated.get(&request.email_id)
+        {
+            return Err(ToolError::InvalidResponse(format!(
+                "Email/set rejected '{}': {}{}",
+                request.email_id,
+                error.error_type,
+                if error.description.is_empty() {
+                    String::new()
+                } else {
+                    format!(": {}", error.description)
+                }
+            )));
+        }
+
+        let keyword_list = truthy_map_keys(&keywords);
         Ok(MarkSeenOutput {
-            mailbox: request.mailbox.clone(),
-            sequence: request.sequence,
-            seen,
+            account_id,
+            email_id: request.email_id.clone(),
+            seen: keyword_list.iter().any(|keyword| keyword == "$seen"),
+            keywords: keyword_list,
         })
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
-pub(crate) struct MessageEnvelopeModel {
-    /// Envelope subject.
-    pub(crate) subject: Option<String>,
-    /// Envelope date.
-    pub(crate) date: Option<String>,
-    /// Envelope senders.
-    pub(crate) from: Vec<String>,
+fn resolve_account_id(
+    config: &JmapConfig,
+    session: &jmap_codec::SessionResource,
+) -> Result<String, ToolError> {
+    config.account_id.clone().map_or_else(
+        || {
+            session
+                .primary_account(MAIL_CAPABILITY)
+                .map(str::to_owned)
+                .ok_or_else(|| {
+                    ToolError::InvalidResponse(
+                        "Session resource did not advertise a primary mail account".to_owned(),
+                    )
+                })
+        },
+        Ok,
+    )
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub(crate) struct MailboxInfoModel {
-    /// Mailbox name.
-    pub(crate) name: String,
-    /// Optional hierarchy delimiter.
-    pub(crate) delimiter: Option<char>,
-    /// Mailbox attributes.
-    pub(crate) attributes: Vec<String>,
+struct ServiceContext<'a> {
+    config: &'a JmapConfig,
+    api_url: &'a str,
+    account_id: &'a str,
 }
 
-impl MailboxInfoModel {
-    fn into_output(self) -> MailboxInfo {
-        MailboxInfo {
-            name: self.name,
-            delimiter: self.delimiter,
-            attributes: self.attributes,
-        }
+fn resolve_mailbox_id<H: Host>(
+    host: &H,
+    context: &ServiceContext<'_>,
+    request: &ListMessagesRequest,
+) -> Result<Option<String>, ToolError> {
+    if let Some(existing_mailbox_id) = request.mailbox_id.as_deref() {
+        return Ok(Some(existing_mailbox_id.to_owned()));
     }
-}
+    let Some(requested_mailbox_name) = request.mailbox_name.as_deref() else {
+        return Ok(None);
+    };
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub(crate) struct MessageSummaryModel {
-    /// Message sequence number.
-    pub(crate) sequence: u32,
-    /// Message UID.
-    pub(crate) uid: Option<u32>,
-    /// Message flags.
-    pub(crate) flags: Vec<String>,
-    /// RFC822 size.
-    pub(crate) size: Option<u32>,
-    /// Selected envelope fields.
-    pub(crate) envelope: MessageEnvelopeModel,
-}
+    let response = jmap_transport::mailbox_get(
+        host,
+        context.config,
+        context.api_url,
+        MailboxGetArguments {
+            account_id: context.account_id.to_owned(),
+            ids: None,
+            properties: None,
+        },
+    )?;
 
-impl MessageSummaryModel {
-    fn into_output(self) -> MessageSummary {
-        MessageSummary {
-            sequence: self.sequence,
-            uid: self.uid,
-            flags: self.flags,
-            size: self.size,
-            subject: self.envelope.subject,
-            date: self.envelope.date,
-            from: self.envelope.from,
-        }
-    }
+    response
+        .list
+        .into_iter()
+        .find(|mailbox| mailbox.name == requested_mailbox_name)
+        .map(|mailbox| Some(mailbox.id))
+        .ok_or_else(|| {
+            ToolError::InvalidRequest(format!("Mailbox '{requested_mailbox_name}' was not found"))
+        })
 }
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub(crate) struct MessageDetailModel {
-    /// Message sequence number.
-    pub(crate) sequence: u32,
-    /// Message UID.
-    pub(crate) uid: Option<u32>,
-    /// Message flags.
-    pub(crate) flags: Vec<String>,
-    /// Selected envelope fields.
-    pub(crate) envelope: MessageEnvelopeModel,
-    /// RFC822 message body rendered as lossy UTF-8.
-    pub(crate) body: Option<String>,
-}
-
-impl MessageDetailModel {
-    fn into_output(self) -> MessageDetail {
-        MessageDetail {
-            sequence: self.sequence,
-            uid: self.uid,
-            flags: self.flags,
-            subject: self.envelope.subject,
-            date: self.envelope.date,
-            from: self.envelope.from,
-            body: self.body,
-        }
-    }
-}
-
-const fn default_port() -> u16 {
-    143
-}
-
-fn default_mailbox() -> String {
-    "INBOX".to_owned()
-}
-
-fn default_sequence_set() -> String {
-    "1:*".to_owned()
+const fn default_timeout_ms() -> u32 {
+    30_000
 }

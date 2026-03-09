@@ -1,35 +1,27 @@
-# IMAP Tool User's Guide
+# JMAP Tool User's Guide
 
 ## Overview
 
-`imap-tool` is an Ironclaw-compatible WebAssembly tool that talks to IMAP
-servers over plain TCP. It implements the `near:agent/tool@0.3.0`
-`sandboxed-tool` world and exposes four actions:
+`jmap-tool` is an Ironclaw-compatible WebAssembly tool that talks to mail
+servers over JMAP using Ironclaw's host-provided HTTP bridge. It implements the
+`near:agent/tool@0.3.0` `sandboxed-tool` world and exposes four actions:
 
 - `list_mailboxes`
 - `list_messages`
 - `get_message`
 - `mark_seen`
 
-The current implementation uses `imap-next` in sans-I/O mode over
-`std::net::TcpStream`. That combination works for `wasm32-wasip2`, but it also
-means the tool currently supports only non-TLS IMAP, usually on port `143`.
+The Wasm tool crate handles Ironclaw bindings, request parsing, and response
+mapping. The reusable transport-agnostic JMAP codec lives in
+`crates/jmap-codec/` and contains the JMAP session, envelope, and mail method
+types shared by the tool transport layer.
 
-## Important limitations
+## Why JMAP and not IMAP
 
-- TLS is not supported yet. Use a local test server, a trusted internal IMAP
-  endpoint, or a tunnel that terminates TLS before the Wasm tool connects.
-- Ironclaw can only inject secrets automatically into HTTP requests today. IMAP
-  socket credentials therefore cannot be injected by the host.
-- The `password_secret_name` field is a presence check only. The tool calls
-  `secret-exists` to fail early when a named secret is missing, but the actual
-  password still has to be provided in the JSON request.
-- In this environment, direct guest TCP from the Wasm component still fails
-  under Wasmtime/WASIp2 with `Protocol not available (os error 50)`. The e2e
-  suite therefore splits validation into two parts: component
-  decoding/instantiation for the built Wasm artifact, and a GreenMail-backed
-  native IMAP flow that exercises the same `imap-next` protocol path outside
-  the guest runtime.
+Ironclaw exposes outbound network access to Wasm tools through the host
+`http-request` capability. That fits JMAP directly because JMAP runs over
+HTTP(S). It does not fit raw IMAP well because IMAP requires guest-managed TCP
+connections, which are not available in the runtime used for this repository.
 
 ## Prerequisites
 
@@ -37,38 +29,36 @@ Install the Rust and Wasm tooling:
 
 ```sh
 rustup target add wasm32-wasip2
-cargo install cargo-component
 ```
 
-For documentation and e2e work you also need:
+For documentation and local validation work you also need:
 
 ```sh
 cargo install mdformat-cli
 npm install --global markdownlint-cli2
-docker --version
 ```
 
-`make e2e` uses the Docker-compatible CLI available on this machine. In this
-environment the `docker` command is backed by Podman.
+`make e2e` uses an in-process `rusmes-jmap` server. It does not require Docker.
 
 ## Repository layout
 
 The build and package flow uses these paths:
 
-- Wasm artifact: `target/wasm32-wasip2/release/imap_tool.wasm`
-- Capabilities file: `imap-tool.capabilities.json`
-- Package directory: `dist/imap-tool/`
+- Wasm artifact: `target/wasm32-wasip2/release/jmap_tool.wasm`
+- Capabilities file: `jmap-tool.capabilities.json`
+- Package directory: `dist/jmap-tool/`
+- Reusable codec crate: `crates/jmap-codec/`
 
 The package directory contains:
 
-- `imap-tool.wasm`
-- `imap-tool.capabilities.json`
+- `jmap-tool.wasm`
+- `jmap-tool.capabilities.json`
 - `README.md` copied from this guide
 
 ## Build and validation targets
 
-The repository keeps lightweight quality gates separate from heavier Wasm and
-Docker tasks.
+The repository keeps the fast code-quality gates separate from Wasm packaging
+and ignored end-to-end tests.
 
 ### Core quality gates
 
@@ -78,8 +68,8 @@ make lint
 make test
 ```
 
-These targets cover formatting, Clippy, Rustdoc generation, unit tests, and the
-`rstest-bdd` behavioural scenarios.
+These targets cover Rust formatting, Clippy, Rustdoc generation, unit tests,
+and the `rstest-bdd` behavioural scenarios.
 
 ### Wasm build and packaging
 
@@ -94,8 +84,8 @@ make package
 cargo rustc --lib --target wasm32-wasip2 --release --crate-type=cdylib
 ```
 
-`make package` copies the build output plus the capabilities sidecar into
-`dist/imap-tool/`.
+`make package` copies the built component, the capabilities sidecar, and this
+guide into `dist/jmap-tool/`.
 
 ### End-to-end test target
 
@@ -107,57 +97,73 @@ This target:
 
 1. Builds the Wasm artifact.
 2. Runs the ignored component-instantiation test that decodes the artifact with
-   `wit-component`, instantiates it with Wasmtime, and verifies exported
-   metadata.
-3. Runs the ignored GreenMail-backed native IMAP test.
-4. Starts `greenmail/standalone` in Docker. In this Podman-backed environment
-   the test uses the fully qualified image name
-   `docker.io/greenmail/standalone` to avoid short-name prompts.
-5. Seeds GreenMail through SMTP, allowing GreenMail to auto-create the test
-   account documented in its FAQ.
-6. Exercises real IMAP flows against GreenMail through the native
-   `NetworkImapService`.
+   `wit-component`, instantiates it with Wasmtime, and verifies the exported
+   schema and description.
+3. Runs the ignored native JMAP service test backed by an in-process
+   `rusmes-jmap` Axum server.
 
-## Capabilities
+## Capabilities and authentication
 
-The sidecar file `imap-tool.capabilities.json` currently requests only secret
-name checks:
+The sidecar file `jmap-tool.capabilities.json` requests:
+
+- `http` access for `GET` and `POST` to the configured JMAP host
+- a bearer-token credential mapping for `jmap_token`
+- secret-name checks for `jmap_token` and `jmap_*`
+
+The checked-in sidecar is an example:
 
 ```json
 {
   "capabilities": {
+    "http": {
+      "allowlist": [
+        {
+          "host": "mail.example.com",
+          "path_prefix": "/",
+          "methods": ["GET", "POST"]
+        }
+      ]
+    },
     "secrets": {
-      "allowed_names": ["imap_password", "imap_*"]
+      "allowed_names": ["jmap_token", "jmap_*"]
     }
   }
 }
 ```
 
-No HTTP, workspace-read, or tool-invocation capability is required for the
-current action set.
+Before installing the tool, update the HTTP allowlist and credential
+`host_patterns` so they match your provider's hostname.
+
+`auth_secret_name` in the request is a preflight check only. The tool calls
+`secret_exists` before making HTTP requests so it can fail fast if the named
+secret is missing. The actual bearer token is still injected by the host
+according to the capabilities file.
 
 ## Request schema
 
 Every request is a JSON object passed to the exported `execute` function. The
-shared connection fields are:
+shared fields are:
 
-- `host`: IMAP server hostname or IP address
-- `port`: optional IMAP port, default `143`
-- `username`: LOGIN username
-- `password`: LOGIN password
-- `password_secret_name`: optional secret name checked with `secret-exists`
+- `action`: one of `list_mailboxes`, `list_messages`, `get_message`, or
+  `mark_seen`
+- `base_url`: base URL of the JMAP service, for example
+  `https://mail.example.com`
+- `account_id`: optional JMAP account ID override
+- `auth_secret_name`: optional secret name checked with `secret_exists`
+- `timeout_ms`: optional per-request timeout, default `30000`
 
 Action-specific fields are:
 
 - `list_mailboxes`: no extra fields
-- `list_messages`: optional `mailbox`, optional `sequence_set`
-- `get_message`: optional `mailbox`, required `sequence`
-- `mark_seen`: optional `mailbox`, required `sequence`
+- `list_messages`: optional `mailbox_id`, optional `mailbox_name`, optional
+  `limit`, optional `position`
+- `get_message`: required `email_id`
+- `mark_seen`: required `email_id`
 
 Defaults:
 
-- `mailbox`: `INBOX`
-- `sequence_set`: `1:*`
+- `limit`: `20`
+- `position`: `0`
 
 ## Usage examples
 
@@ -166,11 +172,8 @@ Defaults:
 ```json
 {
   "action": "list_mailboxes",
-  "host": "127.0.0.1",
-  "port": 143,
-  "username": "alice",
-  "password": "secret",
-  "password_secret_name": "imap_password"
+  "base_url": "https://mail.example.com",
+  "auth_secret_name": "jmap_token"
 }
 ```
 
@@ -179,28 +182,57 @@ Typical success output:
 ```json
 {
   "action": "list_mailboxes",
+  "account_id": "acc-1",
   "mailboxes": [
     {
-      "name": "INBOX",
-      "delimiter": "/",
-      "attributes": ["\\Unmarked"]
+      "id": "mbx-1",
+      "name": "Inbox",
+      "role": "inbox",
+      "parent_id": null,
+      "sort_order": 10,
+      "is_subscribed": true,
+      "total_emails": 4,
+      "unread_emails": 2
     }
   ]
 }
 ```
 
-### List messages
+### List messages from one mailbox
 
 ```json
 {
   "action": "list_messages",
-  "host": "127.0.0.1",
-  "port": 143,
-  "username": "alice",
-  "password": "secret",
-  "password_secret_name": "imap_password",
-  "mailbox": "INBOX",
-  "sequence_set": "1:*"
+  "base_url": "https://mail.example.com",
+  "auth_secret_name": "jmap_token",
+  "mailbox_name": "Inbox",
+  "limit": 10,
+  "position": 0
+}
+```
+
+Typical success output:
+
+```json
+{
+  "action": "list_messages",
+  "account_id": "acc-1",
+  "mailbox_id": "mbx-1",
+  "position": 0,
+  "total": 1,
+  "messages": [
+    {
+      "id": "email-1",
+      "thread_id": "thread-1",
+      "mailbox_ids": ["mbx-1"],
+      "keywords": ["$seen"],
+      "received_at": "2026-03-09T10:00:00Z",
+      "subject": "Hello",
+      "from": ["Alice <alice@example.com>"],
+      "preview": "Body preview",
+      "has_attachment": false
+    }
+  ]
 }
 ```
 
@@ -209,13 +241,31 @@ Typical success output:
 ```json
 {
   "action": "get_message",
-  "host": "127.0.0.1",
-  "port": 143,
-  "username": "alice",
-  "password": "secret",
-  "password_secret_name": "imap_password",
-  "mailbox": "INBOX",
-  "sequence": 1
+  "base_url": "https://mail.example.com",
+  "auth_secret_name": "jmap_token",
+  "email_id": "email-1"
+}
+```
+
+Typical success output:
+
+```json
+{
+  "action": "get_message",
+  "account_id": "acc-1",
+  "message": {
+    "id": "email-1",
+    "thread_id": "thread-1",
+    "mailbox_ids": ["mbx-1"],
+    "keywords": ["$seen"],
+    "received_at": "2026-03-09T10:00:00Z",
+    "subject": "Hello",
+    "from": ["Alice <alice@example.com>"],
+    "to": ["Bob <bob@example.com>"],
+    "preview": "Body preview",
+    "has_attachment": false,
+    "text_body": "Body"
+  }
 }
 ```
 
@@ -224,86 +274,71 @@ Typical success output:
 ```json
 {
   "action": "mark_seen",
-  "host": "127.0.0.1",
-  "port": 143,
-  "username": "alice",
-  "password": "secret",
-  "password_secret_name": "imap_password",
-  "mailbox": "INBOX",
-  "sequence": 1
+  "base_url": "https://mail.example.com",
+  "auth_secret_name": "jmap_token",
+  "email_id": "email-1"
 }
 ```
 
+Typical success output:
+
+```json
+{
+  "action": "mark_seen",
+  "account_id": "acc-1",
+  "email_id": "email-1",
+  "seen": true,
+  "keywords": ["$seen"]
+}
+```
+
+## End-to-end test behaviour
+
+The e2e story is split into two ignored tests:
+
+- a Wasm artifact test that checks the built component shape and instantiates it
+  with Wasmtime
+- a native service test that exercises the same JMAP request flow against a
+  local `rusmes-jmap` server
+
+That split is intentional. It gives honest coverage for the Wasm component and
+the JMAP transport path without pretending that the in-process mock server is a
+full provider implementation.
+
+Current `rusmes-jmap` limitations observed in this repository:
+
+- the session document advertises a fixed `https://jmap.example.com` base URL,
+  so the native test host rewrites the session response to the real local
+  listener before handing it to the service layer
+- `Email/query` does not currently return the seeded filesystem-backed message
+  set reliably in this harness, so `list_messages` is covered by unit and
+  behavioural tests rather than by the native `rusmes-jmap` e2e
+- `Email/get` can round-trip a seeded message ID in this harness, but it does
+  not currently populate the richer subject and text-body projection reliably,
+  so those fields are validated by unit and behavioural tests rather than by
+  the native `rusmes-jmap` e2e
+- `Email/set` is not implemented, so the `mark_seen` native e2e currently
+  asserts that the server returns a `notImplemented` failure
+
+If you need a more complete JMAP integration target, the project plan records
+`cyrusimap/cyrus-docker-test-server` as a heavier fallback.
+
 ## Installing into an Ironclaw tool directory
 
-After packaging, copy the tool into the directory your Ironclaw host reads. The
-neighbouring Ironclaw examples typically use `~/.ironclaw/tools/`.
+After packaging, copy the contents of `dist/jmap-tool/` into the directory your
+Ironclaw host reads for tools. The neighbouring Ironclaw examples typically use
+`~/.ironclaw/tools/`.
+
+Ensure that:
+
+- the Wasm file and capabilities sidecar keep the same basename
+- the capabilities file allowlists your real JMAP host
+- the referenced bearer-token secret exists in the Ironclaw host
+
+Example:
 
 ```sh
 make package
-cp dist/imap-tool/imap-tool.wasm ~/.ironclaw/tools/imap-tool.wasm
-cp dist/imap-tool/imap-tool.capabilities.json ~/.ironclaw/tools/
+cp dist/jmap-tool/jmap-tool.wasm ~/.ironclaw/tools/jmap-tool.wasm
+cp dist/jmap-tool/jmap-tool.capabilities.json ~/.ironclaw/tools/
 ```
-
-If your host expects a different filename, keep the Wasm and capabilities files
-aligned as a pair.
-
-## Testing strategy
-
-The repository uses three layers of validation:
-
-- Unit tests with `rstest` for request parsing and execution wiring
-- Behavioural tests with `rstest-bdd` for user-visible tool behaviour
-- Ignored end-to-end tests for GreenMail-backed Wasm execution
-
-Run the lighter suite during ordinary development:
-
-```sh
-make test
-```
-
-Run the container-backed suite before release or when changing IMAP transport
-behaviour:
-
-```sh
-make e2e
-```
-
-## Troubleshooting
-
-### `make wasm` fails
-
-Check that the Wasm target is installed:
-
-```sh
-rustup target list --installed | grep wasm32-wasip2
-```
-
-### `make e2e` fails to start GreenMail
-
-Confirm the Docker-compatible CLI can pull and start containers:
-
-```sh
-docker pull docker.io/greenmail/standalone
-docker ps
-```
-
-### The tool reports a missing secret
-
-If you set `password_secret_name`, the host must report that secret as present.
-Remember that this is only an early guard. The JSON request still needs the
-real `password` value for the current socket-based workflow.
-
-### The IMAP login succeeds but no messages appear
-
-The GreenMail e2e path seeds mail through SMTP before IMAP reads begin. If you
-are testing against another server, confirm that messages were delivered into
-the selected mailbox and that you are querying the expected sequence set.
-
-### The Wasm component cannot open TCP sockets under Wasmtime
-
-The current `make e2e` flow already captures this limitation and still verifies
-the component artifact plus the native IMAP protocol layer separately. If you
-are investigating guest-side socket support specifically, expect current
-Wasmtime/WASIp2 execution in this environment to fail with
-`Protocol not available (os error 50)`.
