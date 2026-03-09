@@ -4,6 +4,7 @@ PACKAGE_NAME ?= jmap-tool
 WASM_TARGET ?= wasm32-wasip2
 WASM_ARTIFACT ?= target/$(WASM_TARGET)/release/jmap_tool.wasm
 DIST_DIR ?= dist/$(PACKAGE_NAME)
+BUNDLE_ARTIFACT ?= dist/$(PACKAGE_NAME)-$(WASM_TARGET).tar.gz
 
 CARGO ?= cargo
 BUILD_JOBS ?=
@@ -33,12 +34,17 @@ wasm: $(WASM_ARTIFACT) ## Build the release Wasm component
 $(WASM_ARTIFACT):
 	$(CARGO) rustc --lib --target $(WASM_TARGET) --release --crate-type=cdylib
 
-package: wasm ## Package the Wasm artifact and capabilities sidecar
+package: wasm ## Package the Wasm artifact, sidecar, and Ironclaw tar.gz bundle
 	rm -rf $(DIST_DIR)
 	mkdir -p $(DIST_DIR)
 	cp $(WASM_ARTIFACT) $(DIST_DIR)/jmap-tool.wasm
 	cp jmap-tool.capabilities.json $(DIST_DIR)/
 	cp docs/users-guide.md $(DIST_DIR)/README.md
+	rm -f $(BUNDLE_ARTIFACT)
+	tar -C $(DIST_DIR) -czf $(BUNDLE_ARTIFACT) \
+		jmap-tool.wasm \
+		jmap-tool.capabilities.json \
+		README.md
 
 e2e: wasm ## Run rusmes-jmap-backed end-to-end tests
 	$(CARGO) test -- --ignored --nocapture

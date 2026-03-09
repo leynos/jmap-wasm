@@ -435,6 +435,10 @@ Observable success criteria:
   and `make e2e` on the final JMAP tree. The rusmes-backed e2e now passes with
   an honest scope of mailbox listing, seeded-message ID retrieval, and the
   current `Email/set` limitation.
+- [x] 2026-03-09 13:06 GMT: Updated `make package` to emit an Ironclaw web UI
+  `.tar.gz` bundle containing `jmap-tool.wasm`, `jmap-tool.capabilities.json`,
+  and `README.md` at the archive root, matching the installer contract in the
+  Ironclaw repo.
 
 ## Surprises & Discoveries
 
@@ -507,6 +511,10 @@ Observable success criteria:
   stub returning session discovery and `Mailbox/get` JSON is enough to prove
   the component exports the right schema and can execute the JMAP read path
   through the imported Ironclaw HTTP bridge.
+- Ironclaw's extension installer extracts `.tar.gz` bundles by basename and
+  looks specifically for `<name>.wasm` plus `<name>.capabilities.json`. A flat
+  archive root is therefore the clearest packaging contract for custom tool
+  downloads.
 
 ## Decision Log
 

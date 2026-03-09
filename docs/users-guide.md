@@ -47,6 +47,7 @@ The build and package flow uses these paths:
 - Wasm artifact: `target/wasm32-wasip2/release/jmap_tool.wasm`
 - Capabilities file: `jmap-tool.capabilities.json`
 - Package directory: `dist/jmap-tool/`
+- Web UI bundle: `dist/jmap-tool-wasm32-wasip2.tar.gz`
 - Reusable codec crate: `crates/jmap-codec/`
 
 The package directory contains:
@@ -54,6 +55,10 @@ The package directory contains:
 - `jmap-tool.wasm`
 - `jmap-tool.capabilities.json`
 - `README.md` copied from this guide
+
+The `.tar.gz` bundle contains the same three files at the archive root. This
+matches Ironclaw's custom extension installer, which scans the archive for
+`jmap-tool.wasm` and `jmap-tool.capabilities.json` by basename.
 
 ## Build and validation targets
 
@@ -85,7 +90,8 @@ cargo rustc --lib --target wasm32-wasip2 --release --crate-type=cdylib
 ```
 
 `make package` copies the built component, the capabilities sidecar, and this
-guide into `dist/jmap-tool/`.
+guide into `dist/jmap-tool/`, then creates
+`dist/jmap-tool-wasm32-wasip2.tar.gz` for the Ironclaw web UI installer.
 
 ### End-to-end test target
 
@@ -342,3 +348,10 @@ make package
 cp dist/jmap-tool/jmap-tool.wasm ~/.ironclaw/tools/jmap-tool.wasm
 cp dist/jmap-tool/jmap-tool.capabilities.json ~/.ironclaw/tools/
 ```
+
+For the Ironclaw web UI custom installer, host or upload:
+
+- `dist/jmap-tool-wasm32-wasip2.tar.gz`
+
+and enter the extension name as `jmap-tool`. The archive must contain
+`jmap-tool.wasm` and `jmap-tool.capabilities.json`.

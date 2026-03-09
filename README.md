@@ -17,7 +17,7 @@ ______________________________________________________________________
 - **Fits Ironclaw's security model**: The tool uses the host `http-request`
   capability rather than guest-managed TCP sockets.
 - **Ready to package**: `make package` emits the Wasm artifact, capabilities
-  sidecar, and README in one predictable directory.
+  sidecar, README, and an Ironclaw-ready `.tar.gz` bundle.
 - **Honest testing story**: Unit tests, behavioural tests, Wasmtime component
   checks, and a `rusmes-jmap` harness all live in the repo.
 - **Reusable protocol layer**: The `jmap-codec` crate can be reused elsewhere
@@ -47,6 +47,7 @@ That produces:
 - `target/wasm32-wasip2/release/jmap_tool.wasm`
 - `dist/jmap-tool/jmap-tool.wasm`
 - `dist/jmap-tool/jmap-tool.capabilities.json`
+- `dist/jmap-tool-wasm32-wasip2.tar.gz`
 
 The core request payload looks like this:
 
