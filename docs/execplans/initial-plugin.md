@@ -103,8 +103,8 @@ common actions, and local test workflows.
   reusable transport-agnostic JMAP crate. If implementation requires more than
   that or a materially more complex workspace layout, stop and ask for approval.
 - Interface: if Ironclaw’s local WIT interface differs materially from the copy
-  described in `writing-web-assembly-tools-for-ironclaw.md`, stop and reconcile
-  the mismatch before writing code.
+  described in `docs/writing-web-assembly-tools-for-ironclaw.md`, stop and
+  reconcile the mismatch before writing code.
 - Dependencies: if `wit-bindgen`, `wit-component`, `rstest`, `rstest-bdd`,
   `thiserror`, `serde`, `serde_json`, `wasmtime`, `rusmes-jmap`, or the small
   HTTP/server helpers needed for JMAP e2e are insufficient and another

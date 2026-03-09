@@ -83,6 +83,8 @@ ______________________________________________________________________
 
 - [Users' Guide](docs/users-guide.md) — build, package, auth, request schema,
   and local test flow
+- [Authoring Guide](docs/writing-web-assembly-tools-for-ironclaw.md) —
+  experience-grounded guidance for building Ironclaw Wasm tools
 - [Codec README](crates/jmap-codec/README.md) — reusable JMAP codec crate
 - [ExecPlan](docs/execplans/initial-plugin.md) — implementation decisions,
   milestones, and limitations
