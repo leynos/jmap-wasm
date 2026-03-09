@@ -42,8 +42,7 @@ That also means some tempting designs do not fit:
 ## What The Tool Boundary Actually Is
 
 Ironclaw tools export three things and import a handful of host functions. The
-authoritative contract in this repository is
-[`wit/tool.wit`](../wit/tool.wit).
+authoritative contract in this repository is [`wit/tool.wit`](../wit/tool.wit).
 
 At the tool boundary, you export:
 

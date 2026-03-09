@@ -31,10 +31,19 @@ ______________________________________________________________________
 
 ```bash
 rustup target add wasm32-wasip2
-make wasm
 ```
 
 ### Basic usage
+
+Build the Wasm component:
+
+```bash
+make wasm
+```
+
+That produces:
+
+- `target/wasm32-wasip2/release/jmap_tool.wasm`
 
 Build the packaged tool bundle:
 
@@ -44,10 +53,14 @@ make package
 
 That produces:
 
-- `target/wasm32-wasip2/release/jmap_tool.wasm`
 - `dist/jmap-tool/jmap-tool.wasm`
 - `dist/jmap-tool/jmap-tool.capabilities.json`
+- `dist/jmap-tool/README.md`
 - `dist/jmap-tool-wasm32-wasip2.tar.gz`
+
+The `.tar.gz` bundle is the installable artefact for the Ironclaw web UI. It
+contains `jmap-tool.wasm`, `jmap-tool.capabilities.json`, and `README.md` at
+the archive root.
 
 The core request payload looks like this:
 
@@ -63,6 +76,40 @@ Ironclaw passes that JSON string to the tool's `execute` method via the shared
 `sandboxed-tool` interface. The host injects the bearer token according to
 `jmap-tool.capabilities.json`; the tool only checks that the named secret
 exists before making the HTTP request.
+
+______________________________________________________________________
+
+## Build and package
+
+Use the repository `Makefile` targets rather than calling Cargo directly:
+
+```bash
+make check-fmt
+make lint
+make test
+make wasm
+make package
+make e2e
+```
+
+What each target does:
+
+- `make check-fmt` verifies Rust formatting.
+- `make lint` runs Rustdoc generation and Clippy with warnings denied.
+- `make test` runs the workspace unit and behavioural tests.
+- `make wasm` builds the release Wasm component for `wasm32-wasip2`.
+- `make package` stages the installable files under `dist/jmap-tool/` and
+  creates `dist/jmap-tool-wasm32-wasip2.tar.gz`.
+- `make e2e` builds the Wasm artefact and runs the ignored end-to-end checks.
+
+For normal development, the usual flow is:
+
+```bash
+make check-fmt
+make lint
+make test
+make package
+```
 
 ______________________________________________________________________
 
