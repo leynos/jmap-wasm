@@ -26,10 +26,10 @@ means the tool currently supports only non-TLS IMAP, usually on port `143`.
   password still has to be provided in the JSON request.
 - In this environment, direct guest TCP from the Wasm component still fails
   under Wasmtime/WASIp2 with `Protocol not available (os error 50)`. The e2e
-  suite therefore splits validation into two parts:
-  component decoding/instantiation for the built Wasm artifact, and a
-  GreenMail-backed native IMAP flow that exercises the same `imap-next`
-  protocol path outside the guest runtime.
+  suite therefore splits validation into two parts: component
+  decoding/instantiation for the built Wasm artifact, and a GreenMail-backed
+  native IMAP flow that exercises the same `imap-next` protocol path outside
+  the guest runtime.
 
 ## Prerequisites
 
