@@ -208,6 +208,49 @@ later inject the token into HTTP requests. It does not work for values like
 If you find yourself wanting to pass passwords, tokens, or API keys directly in
 tool parameters, you are fighting the platform.
 
+### There Is No General Persistent Tool Config Surface
+
+This is the other constraint that deserves to be stated plainly.
+
+For Wasm tools, Ironclaw does not currently expose a first-class extension
+configuration schema for arbitrary persistent settings such as:
+
+- service base URLs
+- default mailbox names
+- per-tool feature flags
+- saved non-secret provider settings
+
+What you do have is:
+
+- per-call request parameters passed through `schema()` and `execute()`
+- `auth` metadata for auth UX
+- `setup.required_secrets` for one-time secret entry
+- optional `workspace-read` if you explicitly choose a file-based config model
+
+That means `Configure` in the current web UI is effectively a setup-secrets
+flow, not a general extension-settings form.
+
+This is why `jmap-tool` ended up with the split it has:
+
+- `jmap_token` lives in `setup.required_secrets`
+- `base_url` stays in the normal request payload
+
+That split is not stylistic. It follows from the host API:
+
+- the guest can ask whether a secret exists
+- the host can inject a secret into HTTP requests
+- the guest cannot read a secret value back
+
+So if the guest must actually inspect a value later, `setup.required_secrets`
+is the wrong mechanism unless the host is the thing that will consume it.
+
+As a rule of thumb:
+
+- use `setup.required_secrets` for credentials and other host-consumed secrets
+- use request parameters for values the guest must read and act on
+- do not invent a `config` block in the capabilities file and expect Ironclaw
+  to surface it for Wasm tools
+
 ## Pick Libraries That Respect The Host Transport Boundary
 
 This was the most important implementation lesson.
