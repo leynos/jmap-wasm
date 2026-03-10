@@ -81,7 +81,7 @@ The shipped sidecar currently declares:
 
 ```json
 {
-  "version": "0.2.0",
+  "version": "0.1.0-beta5",
   "wit_version": "0.3.0"
 }
 ```
@@ -453,14 +453,26 @@ declares:
 - timeout defaults
 - auth metadata for the host UI
 
-### Hostnames Must Be Real, Not Aspirational
+### Hostnames Must Be Explicit And Exact
 
-The checked-in sidecar uses `mail.example.com` as an example. That is useful
-for the repository, but a real deployment must replace it with the actual JMAP
-provider hostname.
+The checked-in sidecar for this Fastmail beta uses `api.fastmail.com`. That is
+not decoration. Ironclaw checks the outbound HTTP host against the sidecar
+before making the request, so a mismatch fails at runtime even when the tool
+schema, parameters, and secret injection are otherwise correct.
 
-This sounds obvious, but it is an easy way to ship a plugin that installs
-cleanly and fails at runtime.
+The rule is stricter than "close enough":
+
+- `capabilities.http.allowlist[].host` must include the exact outbound host
+- `capabilities.http.credentials.<name>.host_patterns[]` must also include that
+  host
+- `base_url` in the request must resolve to one of those allowed hosts
+
+If any one of those surfaces drifts, the host rejects the request with an error
+such as `HostNotAllowed("api.fastmail.com")`.
+
+This is an easy way to ship a plugin that installs cleanly and fails the first
+time it touches the network, so record the real host early and keep the sidecar
+synchronized with deployment reality.
 
 ### Secret Checks And Credential Injection Are Separate Concerns
 

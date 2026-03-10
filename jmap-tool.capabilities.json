@@ -1,11 +1,11 @@
 {
-  "version": "0.2.0",
+  "version": "0.1.0-beta5",
   "wit_version": "0.3.0",
   "capabilities": {
     "http": {
       "allowlist": [
         {
-          "host": "mail.example.com",
+          "host": "api.fastmail.com",
           "path_prefix": "/",
           "methods": ["GET", "POST"]
         }
@@ -16,7 +16,7 @@
           "location": {
             "type": "bearer"
           },
-          "host_patterns": ["mail.example.com"]
+          "host_patterns": ["api.fastmail.com"]
         }
       },
       "rate_limit": {
@@ -32,7 +32,7 @@
   "auth": {
     "secret_name": "jmap_token",
     "display_name": "JMAP",
-    "instructions": "Use Configure to store a bearer token for your JMAP provider, then update the HTTP allowlist host patterns to match your service.",
+    "instructions": "Use Configure to store a bearer token for Fastmail JMAP. If you target another provider, update both the HTTP allowlist and credential host patterns before installing the tool.",
     "env_var": "JMAP_TOKEN"
   },
   "setup": {

@@ -439,6 +439,11 @@ Observable success criteria:
   `.tar.gz` bundle containing `jmap-tool.wasm`, `jmap-tool.capabilities.json`,
   and `README.md` at the archive root, matching the installer contract in the
   Ironclaw repo.
+- [x] 2026-03-10 11:20 GMT: Fastmail host testing showed that Ironclaw rejects
+  outbound JMAP calls unless the exact provider hostname appears in both the
+  HTTP allowlist and the credential `host_patterns`. Updated the shipped
+  sidecar, release metadata, and authoring docs for the `v0.1.0-beta5` Fastmail
+  beta.
 
 ## Surprises & Discoveries
 
@@ -515,6 +520,11 @@ Observable success criteria:
   looks specifically for `<name>.wasm` plus `<name>.capabilities.json`. A flat
   archive root is therefore the clearest packaging contract for custom tool
   downloads.
+- Ironclaw's HTTP security model validates the outbound host against the
+  sidecar before any request leaves the runtime. A working schema, valid
+  request, and present secret are still insufficient if the exact hostname is
+  missing from either `capabilities.http.allowlist` or the credential
+  `host_patterns`; the runtime fails with `HostNotAllowed(...)` instead.
 
 ## Decision Log
 

@@ -72,7 +72,7 @@ The core request payload looks like this:
 ```json
 {
   "action": "list_mailboxes",
-  "base_url": "https://mail.example.com",
+  "base_url": "https://api.fastmail.com",
   "auth_secret_name": "jmap_token"
 }
 ```
@@ -83,6 +83,11 @@ Ironclaw passes that JSON string to the tool's `execute` method via the shared
 exists before making the HTTP request. Using `"auth_secret_name":"jmap_token"`
 is recommended because it fails fast if the extension has not been configured
 yet.
+
+The shipped `v0.1.0-beta5` capabilities sidecar allowlists `api.fastmail.com`.
+If you are testing against another JMAP provider, update both the HTTP
+`allowlist` entry and the credential `host_patterns` before installing the
+bundle.
 
 ______________________________________________________________________
 

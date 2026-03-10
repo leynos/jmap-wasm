@@ -124,7 +124,7 @@ The sidecar file `jmap-tool.capabilities.json` requests:
 - secret-name checks for `jmap_token` and `jmap_*`
 - setup UI for the required `jmap_token` secret
 
-The checked-in sidecar is an example:
+The checked-in sidecar for `v0.1.0-beta5` is preconfigured for Fastmail:
 
 ```json
 {
@@ -132,7 +132,7 @@ The checked-in sidecar is an example:
     "http": {
       "allowlist": [
         {
-          "host": "mail.example.com",
+          "host": "api.fastmail.com",
           "path_prefix": "/",
           "methods": ["GET", "POST"]
         }
@@ -145,8 +145,14 @@ The checked-in sidecar is an example:
 }
 ```
 
-Before installing the tool, update the HTTP allowlist and credential
-`host_patterns` so they match your provider's hostname.
+The `allowlist` and the credential `host_patterns` must both match the exact
+HTTP host that Ironclaw will call. If they do not, the host rejects the request
+before it leaves the runtime, for example with
+`HostNotAllowed("api.fastmail.com")`.
+
+For the shipped Fastmail beta you can install the bundle as-is. For any other
+JMAP provider, update both the HTTP allowlist and credential `host_patterns`
+before installing the tool.
 
 After installing the extension, use Ironclaw's `Configure` action to store the
 `jmap_token` secret for the account this tool should use.
@@ -194,7 +200,7 @@ Defaults:
 ```json
 {
   "action": "list_mailboxes",
-  "base_url": "https://mail.example.com",
+  "base_url": "https://api.fastmail.com",
   "auth_secret_name": "jmap_token"
 }
 ```
@@ -225,7 +231,7 @@ Typical success output:
 ```json
 {
   "action": "list_messages",
-  "base_url": "https://mail.example.com",
+  "base_url": "https://api.fastmail.com",
   "auth_secret_name": "jmap_token",
   "mailbox_name": "Inbox",
   "limit": 10,
