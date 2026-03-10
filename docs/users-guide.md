@@ -53,13 +53,13 @@ The build and package flow uses these paths:
 
 The package directory contains:
 
-- `jmap-tool.wasm`
-- `jmap-tool.capabilities.json`
+- `jmap.wasm`
+- `jmap.capabilities.json`
 - `README.md` copied from this guide
 
 The `.tar.gz` bundle contains the same three files at the archive root. This
 matches Ironclaw's custom extension installer, which scans the archive for
-`jmap-tool.wasm` and `jmap-tool.capabilities.json` by basename.
+`jmap.wasm` and `jmap.capabilities.json` by basename.
 
 ## Build and validation targets
 
@@ -96,7 +96,8 @@ existing file in `target/`. That avoids stale component binaries when the
 vendored WIT contract changes.
 
 `make package` copies the built component, the capabilities sidecar, and this
-guide into `dist/jmap-tool/`, then creates `dist/jmap-wasm32-wasip2.tar.gz` for
+guide into `dist/jmap-tool/`, renaming the packaged Wasm and sidecar files to
+the stripped bundle basename, then creates `dist/jmap-wasm32-wasip2.tar.gz` for
 the Ironclaw web UI installer.
 
 ### End-to-end test target
@@ -360,13 +361,13 @@ Example:
 
 ```sh
 make package
-cp dist/jmap-tool/jmap-tool.wasm ~/.ironclaw/tools/jmap-tool.wasm
-cp dist/jmap-tool/jmap-tool.capabilities.json ~/.ironclaw/tools/
+cp dist/jmap-tool/jmap.wasm ~/.ironclaw/tools/jmap.wasm
+cp dist/jmap-tool/jmap.capabilities.json ~/.ironclaw/tools/
 ```
 
 For the Ironclaw web UI custom installer, host or upload:
 
 - `dist/jmap-wasm32-wasip2.tar.gz`
 
-and enter the extension name as `jmap-tool`. The archive must contain
-`jmap-tool.wasm` and `jmap-tool.capabilities.json`.
+and enter the extension name as `jmap`. The archive must contain `jmap.wasm`
+and `jmap.capabilities.json`.

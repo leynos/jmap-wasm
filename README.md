@@ -53,14 +53,14 @@ make package
 
 That produces:
 
-- `dist/jmap-tool/jmap-tool.wasm`
-- `dist/jmap-tool/jmap-tool.capabilities.json`
+- `dist/jmap-tool/jmap.wasm`
+- `dist/jmap-tool/jmap.capabilities.json`
 - `dist/jmap-tool/README.md`
 - `dist/jmap-wasm32-wasip2.tar.gz`
 
 The `.tar.gz` bundle is the installable artefact for the Ironclaw web UI. It
-contains `jmap-tool.wasm`, `jmap-tool.capabilities.json`, and `README.md` at
-the archive root.
+contains `jmap.wasm`, `jmap.capabilities.json`, and `README.md` at the archive
+root.
 
 After installing the extension in Ironclaw, use `Configure` to store the
 `jmap_token` secret for the account you want this tool to use. The base URL is
@@ -106,8 +106,8 @@ What each target does:
   denied.
 - `make test` runs the unit, behavioural, and end-to-end test targets.
 - `make wasm` builds the release Wasm component for `wasm32-wasip2`.
-- `make package` stages the installable files under `dist/jmap-tool/` and
-  creates `dist/jmap-wasm32-wasip2.tar.gz`.
+- `make package` stages the installable files under `dist/jmap-tool/` with the
+  stripped bundle basename and creates `dist/jmap-wasm32-wasip2.tar.gz`.
 - `make e2e` builds the Wasm artefact and runs the ignored end-to-end checks.
 
 Tagged releases are also automated. Pushing a `v*.*.*` tag runs the GitHub

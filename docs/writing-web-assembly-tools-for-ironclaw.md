@@ -491,8 +491,8 @@ The practical installer contract is:
 
 `jmap-tool` currently packages:
 
-- `dist/jmap-tool/jmap-tool.wasm`
-- `dist/jmap-tool/jmap-tool.capabilities.json`
+- `dist/jmap-tool/jmap.wasm`
+- `dist/jmap-tool/jmap.capabilities.json`
 - `dist/jmap-tool/README.md`
 - `dist/jmap-wasm32-wasip2.tar.gz`
 
@@ -502,8 +502,8 @@ contract.
 
 In this repository, the tarball basename intentionally strips a trailing
 `-tool` or `_tool` suffix from `PACKAGE_NAME`. That keeps the archive name
-shorter while preserving the install-critical inner filenames such as
-`jmap-tool.wasm` and `jmap-tool.capabilities.json`.
+shorter and also drives the packaged inner filenames, yielding install-critical
+paths such as `jmap.wasm` and `jmap.capabilities.json`.
 
 ### Bundle Naming And Install Naming Must Match
 
@@ -513,9 +513,9 @@ names.
 
 For this tool, that means:
 
-- install it as `jmap-tool`
-- ship `jmap-tool.wasm`
-- ship `jmap-tool.capabilities.json`
+- install it as `jmap`
+- ship `jmap.wasm`
+- ship `jmap.capabilities.json`
 
 Do not assume Ironclaw will infer or rewrite those names for you.
 

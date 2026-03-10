@@ -8,6 +8,8 @@ DIST_DIR ?= dist/$(PACKAGE_NAME)
 BUNDLE_NAME ?= $(patsubst %-tool,%,$(patsubst %_tool,%,$(PACKAGE_NAME)))
 BUNDLE_ARTIFACT ?= dist/$(BUNDLE_NAME)-$(WASM_TARGET).tar.gz
 LEGACY_BUNDLE_ARTIFACT ?= dist/$(PACKAGE_NAME)-$(WASM_TARGET).tar.gz
+PACKAGED_WASM_NAME ?= $(BUNDLE_NAME).wasm
+PACKAGED_SIDECAR_NAME ?= $(BUNDLE_NAME).capabilities.json
 
 CARGO ?= cargo
 BUILD_JOBS ?=
@@ -47,14 +49,14 @@ wasm: ## Build the release Wasm component
 package: wasm ## Package the Wasm artifact, sidecar, and Ironclaw tar.gz bundle
 	rm -rf $(DIST_DIR)
 	mkdir -p $(DIST_DIR)
-	cp $(WASM_ARTIFACT) $(DIST_DIR)/jmap-tool.wasm
-	cp jmap-tool.capabilities.json $(DIST_DIR)/
+	cp $(WASM_ARTIFACT) $(DIST_DIR)/$(PACKAGED_WASM_NAME)
+	cp jmap-tool.capabilities.json $(DIST_DIR)/$(PACKAGED_SIDECAR_NAME)
 	cp docs/users-guide.md $(DIST_DIR)/README.md
 	rm -f $(LEGACY_BUNDLE_ARTIFACT)
 	rm -f $(BUNDLE_ARTIFACT)
 	tar -C $(DIST_DIR) -czf $(BUNDLE_ARTIFACT) \
-		jmap-tool.wasm \
-		jmap-tool.capabilities.json \
+		$(PACKAGED_WASM_NAME) \
+		$(PACKAGED_SIDECAR_NAME) \
 		README.md
 
 e2e: wasm ## Run rusmes-jmap-backed end-to-end tests
