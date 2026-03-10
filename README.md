@@ -56,7 +56,7 @@ That produces:
 - `dist/jmap-tool/jmap-tool.wasm`
 - `dist/jmap-tool/jmap-tool.capabilities.json`
 - `dist/jmap-tool/README.md`
-- `dist/jmap-tool-wasm32-wasip2.tar.gz`
+- `dist/jmap-wasm32-wasip2.tar.gz`
 
 The `.tar.gz` bundle is the installable artefact for the Ironclaw web UI. It
 contains `jmap-tool.wasm`, `jmap-tool.capabilities.json`, and `README.md` at
@@ -107,12 +107,12 @@ What each target does:
 - `make test` runs the unit, behavioural, and end-to-end test targets.
 - `make wasm` builds the release Wasm component for `wasm32-wasip2`.
 - `make package` stages the installable files under `dist/jmap-tool/` and
-  creates `dist/jmap-tool-wasm32-wasip2.tar.gz`.
+  creates `dist/jmap-wasm32-wasip2.tar.gz`.
 - `make e2e` builds the Wasm artefact and runs the ignored end-to-end checks.
 
 Tagged releases are also automated. Pushing a `v*.*.*` tag runs the GitHub
 release workflow, rebuilds the package bundle, generates changelog notes from
-Git history, and publishes `dist/jmap-tool-wasm32-wasip2.tar.gz` on the GitHub
+Git history, and publishes `dist/jmap-wasm32-wasip2.tar.gz` on the GitHub
 release.
 
 For normal development, the usual flow is:

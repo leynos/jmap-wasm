@@ -494,11 +494,16 @@ The practical installer contract is:
 - `dist/jmap-tool/jmap-tool.wasm`
 - `dist/jmap-tool/jmap-tool.capabilities.json`
 - `dist/jmap-tool/README.md`
-- `dist/jmap-tool-wasm32-wasip2.tar.gz`
+- `dist/jmap-wasm32-wasip2.tar.gz`
 
 The installer-critical files are the Wasm binary and the capabilities sidecar.
 The packaged `README.md` is a convenience for inspection, not the core install
 contract.
+
+In this repository, the tarball basename intentionally strips a trailing
+`-tool` or `_tool` suffix from `PACKAGE_NAME`. That keeps the archive name
+shorter while preserving the install-critical inner filenames such as
+`jmap-tool.wasm` and `jmap-tool.capabilities.json`.
 
 ### Bundle Naming And Install Naming Must Match
 

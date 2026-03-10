@@ -5,7 +5,9 @@ TARGET ?= libjmap_tool.rlib
 WASM_TARGET ?= wasm32-wasip2
 WASM_ARTIFACT ?= target/$(WASM_TARGET)/release/jmap_tool.wasm
 DIST_DIR ?= dist/$(PACKAGE_NAME)
-BUNDLE_ARTIFACT ?= dist/$(PACKAGE_NAME)-$(WASM_TARGET).tar.gz
+BUNDLE_NAME ?= $(patsubst %-tool,%,$(patsubst %_tool,%,$(PACKAGE_NAME)))
+BUNDLE_ARTIFACT ?= dist/$(BUNDLE_NAME)-$(WASM_TARGET).tar.gz
+LEGACY_BUNDLE_ARTIFACT ?= dist/$(PACKAGE_NAME)-$(WASM_TARGET).tar.gz
 
 CARGO ?= cargo
 BUILD_JOBS ?=
@@ -48,6 +50,7 @@ package: wasm ## Package the Wasm artifact, sidecar, and Ironclaw tar.gz bundle
 	cp $(WASM_ARTIFACT) $(DIST_DIR)/jmap-tool.wasm
 	cp jmap-tool.capabilities.json $(DIST_DIR)/
 	cp docs/users-guide.md $(DIST_DIR)/README.md
+	rm -f $(LEGACY_BUNDLE_ARTIFACT)
 	rm -f $(BUNDLE_ARTIFACT)
 	tar -C $(DIST_DIR) -czf $(BUNDLE_ARTIFACT) \
 		jmap-tool.wasm \

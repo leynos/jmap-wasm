@@ -48,7 +48,7 @@ The build and package flow uses these paths:
 - Wasm artifact: `target/wasm32-wasip2/release/jmap_tool.wasm`
 - Capabilities file: `jmap-tool.capabilities.json`
 - Package directory: `dist/jmap-tool/`
-- Web UI bundle: `dist/jmap-tool-wasm32-wasip2.tar.gz`
+- Web UI bundle: `dist/jmap-wasm32-wasip2.tar.gz`
 - Reusable codec crate: `crates/jmap-codec/`
 
 The package directory contains:
@@ -96,8 +96,8 @@ existing file in `target/`. That avoids stale component binaries when the
 vendored WIT contract changes.
 
 `make package` copies the built component, the capabilities sidecar, and this
-guide into `dist/jmap-tool/`, then creates
-`dist/jmap-tool-wasm32-wasip2.tar.gz` for the Ironclaw web UI installer.
+guide into `dist/jmap-tool/`, then creates `dist/jmap-wasm32-wasip2.tar.gz` for
+the Ironclaw web UI installer.
 
 ### End-to-end test target
 
@@ -366,7 +366,7 @@ cp dist/jmap-tool/jmap-tool.capabilities.json ~/.ironclaw/tools/
 
 For the Ironclaw web UI custom installer, host or upload:
 
-- `dist/jmap-tool-wasm32-wasip2.tar.gz`
+- `dist/jmap-wasm32-wasip2.tar.gz`
 
 and enter the extension name as `jmap-tool`. The archive must contain
 `jmap-tool.wasm` and `jmap-tool.capabilities.json`.
