@@ -1,3 +1,175 @@
-# IMAP WASM Plugin for IronClaw
+# jmap-tool
 
-This is a generated project using [Copier](https://copier.readthedocs.io/).
+*An Ironclaw-compatible Wasm mail tool that talks JMAP over the host HTTP
+bridge.*
+
+`jmap-tool` packages a sandboxed WebAssembly component for Ironclaw hosts that
+need mailbox listing, message listing, message retrieval, and `$seen` updates
+without giving guest code raw socket access. The root crate handles the
+Ironclaw bindings and transport orchestration, while the reusable
+`crates/jmap-codec` crate holds the transport-agnostic JMAP request and
+response models.
+
+______________________________________________________________________
+
+## Why jmap-tool?
+
+- **Fits Ironclaw's security model**: The tool uses the host `http-request`
+  capability rather than guest-managed TCP sockets.
+- **Ready to package**: `make package` emits the Wasm artifact, capabilities
+  sidecar, README, and an Ironclaw-ready `.tar.gz` bundle.
+- **Honest testing story**: Unit tests, behavioural tests, Wasmtime component
+  checks, and a `rusmes-jmap` harness all live in the repo.
+- **Reusable protocol layer**: The `jmap-codec` crate can be reused elsewhere
+  without pulling in Ironclaw bindings.
+
+______________________________________________________________________
+
+## Quick start
+
+### Installation
+
+```bash
+rustup target add wasm32-wasip2
+```
+
+### Basic usage
+
+Build the Wasm component:
+
+```bash
+make wasm
+```
+
+That produces:
+
+- `target/wasm32-wasip2/release/jmap_tool.wasm`
+
+Build the packaged tool bundle:
+
+```bash
+make package
+```
+
+That produces:
+
+- `dist/jmap-tool/jmap.wasm`
+- `dist/jmap-tool/jmap.capabilities.json`
+- `dist/jmap-tool/README.md`
+- `dist/jmap-wasm32-wasip2.tar.gz`
+
+The `.tar.gz` bundle is the installable artefact for the Ironclaw web UI. It
+contains `jmap.wasm`, `jmap.capabilities.json`, and `README.md` at the archive
+root.
+
+After installing the extension in Ironclaw, use `Configure` to store the
+`jmap_token` secret for the account you want this tool to use. The base URL is
+still supplied per request because Ironclaw's Wasm tool model does not expose a
+general persistent non-secret config surface.
+
+The core request payload looks like this:
+
+```json
+{
+  "action": "list_mailboxes",
+  "base_url": "https://api.fastmail.com",
+  "auth_secret_name": "jmap_token"
+}
+```
+
+Ironclaw passes that JSON string to the tool's `execute` method via the shared
+`sandboxed-tool` interface. The host injects the bearer token according to
+`jmap-tool.capabilities.json`; the tool only checks that the named secret
+exists before making the HTTP request. Using `"auth_secret_name":"jmap_token"`
+is recommended because it fails fast if the extension has not been configured
+yet.
+
+The shipped `v0.1.0-beta5` capabilities sidecar allowlists `api.fastmail.com`.
+If you are testing against another JMAP provider, update both the HTTP
+`allowlist` entry and the credential `host_patterns` before installing the
+bundle.
+
+______________________________________________________________________
+
+## Build and package
+
+Use the repository `Makefile` targets rather than calling Cargo directly:
+
+```bash
+make check-fmt
+make lint
+make test
+make wasm
+make package
+make e2e
+```
+
+What each target does:
+
+- `make check-fmt` verifies Rust formatting.
+- `make lint` runs Rustdoc generation, Clippy, and Whitaker with warnings
+  denied.
+- `make test` runs the unit, behavioural, and end-to-end test targets.
+- `make wasm` builds the release Wasm component for `wasm32-wasip2`.
+- `make package` stages the installable files under `dist/jmap-tool/` with the
+  stripped bundle basename and creates `dist/jmap-wasm32-wasip2.tar.gz`.
+- `make e2e` builds the Wasm artefact and runs the ignored end-to-end checks.
+
+Tagged releases are also automated. Pushing a `v*.*.*` tag runs the GitHub
+release workflow, rebuilds the package bundle, generates changelog notes from
+Git history, and publishes `dist/jmap-wasm32-wasip2.tar.gz` on the GitHub
+release.
+
+For normal development, the usual flow is:
+
+```bash
+make check-fmt
+make lint
+make test
+```
+
+______________________________________________________________________
+
+## Features
+
+- Implements Ironclaw's `sandboxed-tool` world with `execute`, `schema`, and
+  `description`.
+- Supports `list_mailboxes`, `list_messages`, `get_message`, and `mark_seen`.
+- Packages a reusable `jmap-codec` crate for JMAP session, envelope, and mail
+  method types.
+- Includes `rstest`, `rstest-bdd`, `wit-component`, and `wasmtime` coverage.
+- Ships an Ironclaw capabilities sidecar for HTTP allowlisting and bearer-token
+  injection.
+
+______________________________________________________________________
+
+## Learn more
+
+- [Users' Guide](docs/users-guide.md) — build, package, auth, request schema,
+  and local test flow
+- [Authoring Guide](docs/writing-web-assembly-tools-for-ironclaw.md) —
+  experience-grounded guidance for building Ironclaw Wasm tools
+- [Codec README](crates/jmap-codec/README.md) — reusable JMAP codec crate
+- [ExecPlan](docs/execplans/initial-plugin.md) — implementation decisions,
+  milestones, and limitations
+- [Agent instructions](AGENTS.md) — repository conventions and contributor
+  gates
+
+______________________________________________________________________
+
+## Licence
+
+ISC — see [LICENSE](LICENSE) for details.
+
+______________________________________________________________________
+
+## Contributing
+
+Contributions are welcome. Please read [AGENTS.md](AGENTS.md) before making
+changes, and run the project gates before sending a patch:
+
+```bash
+make check-fmt
+make lint
+make test
+```
