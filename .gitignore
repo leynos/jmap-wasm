@@ -1,5 +1,6 @@
 target/
 **/*.rs.bk
+Cargo.lock
 .coverage
 .pytest_cache/
 .uv-cache/
