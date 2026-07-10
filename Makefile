@@ -1,4 +1,5 @@
-.PHONY: help all clean test build release lint fmt check-fmt markdownlint nixie
+.PHONY: help all clean test build release lint fmt check-fmt markdownlint nixie \
+	spelling spelling-helper-test
 
 
 TARGET ?= libimap_wasm.rlib
@@ -12,11 +13,15 @@ TEST_FLAGS ?= $(CARGO_FLAGS)
 MDLINT ?= markdownlint-cli2
 NIXIE ?= nixie
 WHITAKER ?= whitaker
+UV ?= uv
+UV_ENV = UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
+RUFF_VERSION ?= 0.15.12
+TYPOS_VERSION ?= 1.48.0
 
 build: target/debug/$(TARGET) ## Build debug binary
 release: target/release/$(TARGET) ## Build release binary
 
-all: check-fmt lint test ## Perform a comprehensive check of code
+all: check-fmt lint test spelling ## Perform a comprehensive check of code
 
 clean: ## Remove build artifacts
 	$(CARGO) clean
@@ -39,8 +44,30 @@ fmt: ## Format Rust and Markdown sources
 check-fmt: ## Verify formatting
 	$(CARGO) fmt --all -- --check
 
-markdownlint: ## Lint Markdown files
+markdownlint: spelling ## Lint Markdown files and enforce spelling
 	$(MDLINT) '**/*.md'
+
+spelling: spelling-helper-test ## Enforce en-GB-oxendict spelling in Markdown prose
+	@$(UV_ENV) $(UV) run scripts/generate_typos_config.py
+	@git ls-files -z '*.md' | \
+		xargs -0 -r env $(UV_ENV) $(UV) tool run typos@$(TYPOS_VERSION) \
+		--config typos.toml --force-exclude
+
+spelling-helper-test: ## Validate the shared spelling-policy integration
+	@$(UV_ENV) $(UV) tool run ruff@$(RUFF_VERSION) format --isolated \
+		--target-version py313 --check scripts/generate_typos_config.py \
+		scripts/typos_rollout.py scripts/typos_rollout_cache.py \
+		scripts/tests/test_typos_rollout.py
+	@$(UV_ENV) $(UV) tool run ruff@$(RUFF_VERSION) check --isolated \
+		--target-version py313 scripts/generate_typos_config.py \
+		scripts/typos_rollout.py scripts/typos_rollout_cache.py \
+		scripts/tests/test_typos_rollout.py
+	@PYTHONPATH=scripts $(UV_ENV) $(UV) run --no-project --python 3.13 \
+		--with pytest==9.0.2 --with pytest-cov==7.0.0 \
+		python -m pytest scripts/tests/test_typos_rollout.py \
+		-c /dev/null --rootdir=. -p no:cacheprovider \
+		--cov=generate_typos_config --cov=typos_rollout \
+		--cov=typos_rollout_cache --cov-fail-under=90
 
 nixie: ## Validate Mermaid diagrams
 	$(NIXIE) --no-sandbox

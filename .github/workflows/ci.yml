@@ -20,6 +20,8 @@ jobs:
         uses: leynos/shared-actions/.github/actions/setup-rust@3c1fa01bcf4c26dac79975c18b74c01d577dcf95
       - name: Format
         run: make check-fmt
+      - name: Spelling
+        run: make spelling
       - name: Markdown lint
         uses: DavidAnson/markdownlint-cli2-action@992badcdf24e3b8eb7e87ff9287fe931bcb00c6e
         with:

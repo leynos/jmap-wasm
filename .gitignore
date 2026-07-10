@@ -1,2 +1,10 @@
 target/
 **/*.rs.bk
+Cargo.lock
+.coverage
+.pytest_cache/
+.uv-cache/
+.uv-tools/
+__pycache__/
+.typos-oxendict-base.json
+.typos-oxendict-base.toml
