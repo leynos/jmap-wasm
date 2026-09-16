@@ -20,6 +20,8 @@
     ".uv-cache/**",
     "memories/**",
     "CRUSH.md",
-    "**/dist/**"
+    "**/dist/**",
+    "**/.uv-cache/**",
+    "**/.uv-tools/**"
   ]
 }
