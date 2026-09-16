@@ -6,13 +6,14 @@ schema = 1
 stems = []
 
 [words]
-# Official names: Azure Architecture Center and GitHub Flavored Markdown.
-accepted = ["Center", "Flavored"]
+accepted = []
 
 [words.corrections]
 
 [patterns]
-ignore = []
+# Inline code spans were masked by the previous dictionary snapshot; kept until
+# the shared dictionary rules on it.
+ignore = ["`[^`\\n]+`"]
 
 [files]
 exclude = []
