@@ -16,6 +16,10 @@ identifier, API, proper-name, or fixture exceptions in `typos.local.toml`;
 hand-editing `typos.toml` is not supported and any edits are overwritten on the
 next run.
 
+`TYPOS_CONFIG_BUILDER_VERSION` in the `Makefile` pins the
+`typos-config-builder` release the gate runs (currently `v0.1.3`). Raise it
+together with the regenerated `typos.toml`, never on its own.
+
 Cyclopts is the default command‑line interface (CLI) framework for new and
 updated scripts. This document supersedes prior guidance that recommended Typer
 as a default.
