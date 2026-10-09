@@ -10,7 +10,9 @@ This is a generated project using [Copier](https://copier.readthedocs.io/).
 Development builds (`make test`, `make lint`, `make typecheck` and the debug
 build) use the parallel `rustc` frontend (`-Zthreads=8`) and, on Linux, the
 `mold` linker. Install `mold` before building on Linux: the configuration names
-it, so a build without it fails at link time.
+it, so a build without it fails at link time (on Debian or Ubuntu,
+`sudo apt-get install mold`). macOS keeps its platform linker, because `mold`
+ships for Linux only.
 
 The flags live in `.cargo/config.toml`, but Cargo applies exactly one
 `rustflags` source and an assigned `RUSTFLAGS` replaces every configuration
