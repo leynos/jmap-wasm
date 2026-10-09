@@ -43,3 +43,18 @@ only where the full suite passes under it, and a build alone proves nothing
 about miscompilation or unwinding (recorded 2026-09-29, on the pinned
 `nightly-2026-06-05`). Revisit when the repository has tests: measure the whole
 suite under the backend and adopt it if every test passes.
+
+## The spelling gate
+
+`make spelling` enforces en-GB-oxendict spelling by running the
+`typos-config-builder` gate, pinned by `TYPOS_CONFIG_BUILDER_VERSION` in the
+`Makefile` (currently `v0.1.3`). The gate regenerates `typos.toml` from the
+live shared dictionary and this repository's `typos.local.toml` overlay on
+every run, runs Typos over tracked Markdown, and enforces the shared phrase
+corrections that single-word checks cannot express. `typos.toml` is generated
+and never drift checked in continuous integration; commit the regenerated file
+when it changes, and keep repository-specific exceptions in `typos.local.toml`
+as narrow patterns. The builder requires Python 3.14 or newer, so the target
+passes `--python 3.14` and `uv` fetches that interpreter when the host lacks
+one. Raise the pin together with the regenerated `typos.toml`, never on its
+own. See [the scripting standards](scripting-standards.md) for the policy.
