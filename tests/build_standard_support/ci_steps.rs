@@ -13,13 +13,22 @@ use super::config::{Flags, Problems, THREADS_FLAG};
 /// The workflows that set up Rust and build under the standard, as name and text.
 /// The list is this repository's own, so a workflow that stops setting up Rust
 /// fails the contract rather than dropping out of it.
-pub const WORKFLOWS: &[(&str, &str)] = &[(
-    "ci.yml",
-    include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/.github/workflows/ci.yml"
-    )),
-)];
+pub const WORKFLOWS: &[(&str, &str)] = &[
+    (
+        "ci.yml",
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/.github/workflows/ci.yml"
+        )),
+    ),
+    (
+        "coverage-main.yml",
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/.github/workflows/coverage-main.yml"
+        )),
+    ),
+];
 
 /// A workflow file: its name for complaints, and its text.
 #[derive(Clone, Copy)]
@@ -56,7 +65,7 @@ pub const COVERAGE_DENIES_WARNINGS: bool = true;
 /// How many coverage steps the listed workflows hold. Pinned both ways, so removing a coverage step
 /// (and with it the assertions about its `RUSTFLAGS`) fails the contract instead of reading as
 /// success, and adding one is a deliberate edit of this number.
-pub const COVERAGE_STEP_COUNT: usize = 1;
+pub const COVERAGE_STEP_COUNT: usize = 2;
 
 /// A step of a workflow file, found by the action it uses.
 struct Step<'a> {
