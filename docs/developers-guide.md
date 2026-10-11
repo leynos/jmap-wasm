@@ -83,3 +83,18 @@ run the target; `.github/cv005.toml` holds the repository name and nothing
 else. A Dependabot pull request merged by the automerge workflow fires no push
 event, so that merge publishes nothing until the next push to `main`
 (shared-actions #518 tracks the fix).
+
+## YAML lint
+
+`make lint` runs `yamllint --strict` over every Git-tracked `*.yml` and
+`*.yaml` file, then `actionlint` over the workflows, which also runs
+`shellcheck` over their `run:` scripts. Install yamllint 1.38.0, actionlint
+1.7.12 and shellcheck 0.11.0 locally, as CI does through the shared
+`install-yaml-lint` action, so results agree. Run the targets from the
+repository root: yamllint resolves `.yamllint.yml`, which extends the estate
+base `.yamllint-estate.yml` (copied verbatim, never edited here), against the
+working directory. `.github/actionlint.yaml` declares the `ubicloud-*` runner
+labels. `tests/yaml_lint_contract/` judges the Makefile and workflow wiring
+against fixtures and then the real files, pins the estate base, and its
+boundary file runs the Make targets with stand-in tools to prove the
+tracked-files list and that a tool failure fails its target.
