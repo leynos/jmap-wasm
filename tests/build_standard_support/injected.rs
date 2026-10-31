@@ -8,7 +8,7 @@ use std::fmt::Write as _;
 use super::{
     config::{Pin, THREADS_FLAG},
     development::{Tools, development_problems_expecting},
-    make::{Host, Target},
+    make::{Host, MakeRunner, Target},
 };
 
 /// Renders canned `make -n` text for a fake runner through a fallible writer, so
