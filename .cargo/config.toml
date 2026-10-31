@@ -20,3 +20,9 @@ rustflags = ["-Zthreads=8"]
 # platform linker.
 [target.'cfg(target_os = "linux")']
 rustflags = ["-Zthreads=8", "-Clink-arg=-fuse-ld=mold"]
+
+# Dated nightlies from 2026-07-31 take the native Cargo key; raw rustc metadata
+# flags break build scripts and are not used. The release workflow builds on
+# stable Cargo, which ignores this table.
+[unstable]
+embed-metadata = false
