@@ -41,8 +41,10 @@ Exception: Cranelift is not the development-profile backend, because the
 repository has no test suite to measure it with. The estate adopts the backend
 only where the full suite passes under it, and a build alone proves nothing
 about miscompilation or unwinding (recorded 2026-09-29, on the pinned
-`nightly-2026-06-05`). Revisit when the repository has tests: measure the whole
-suite under the backend and adopt it if every test passes.
+`nightly-2026-06-05`). The pin is now `nightly-2026-10-30`; the repository
+still has no test suite, so no measurement was taken on it and the exception
+stands without a deferral date. Revisit when the repository has tests: measure
+the whole suite under the backend and adopt it if every test passes.
 
 ## The spelling gate
 
