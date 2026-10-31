@@ -4,7 +4,7 @@
 //! each target must run the tools the contract recorded for it.
 
 use super::{
-    config::{Pin, Problems},
+    config::{Flags, Pin, Problems},
     make::{Assignment, Command, Host, MakeRunner, Target, make_commands},
     shell::{compiles, names_program},
 };
@@ -48,20 +48,50 @@ fn bare_problem(target: Target<'_>, host: Host, command: &str) -> String {
     )
 }
 
+/// Returns the complaint about a direct Whitaker command, if any: it must assign the warning policy
+/// and nothing of the caller's `RUSTFLAGS`, and must carry neither the frontend flag nor the linker
+/// flag.
+fn isolated_problem(
+    target: Target<'_>,
+    host: Host,
+    flags: &Flags,
+    inherits: bool,
+) -> Option<String> {
+    let on = host.make_value();
+    if inherits {
+        return Some(format!(
+            "`make {target}` on {on} lets Whitaker inherit the caller's RUSTFLAGS"
+        ));
+    }
+    if flags.names_threads() || flags.names_linker() {
+        return Some(format!(
+            "`make {target}` on {on} gives Whitaker the development flags: {flags:?}"
+        ));
+    }
+    (!flags.denies_warnings())
+        .then(|| format!("`make {target}` on {on} runs Whitaker without -D warnings"))
+}
+
 /// Returns the complaint about one development command, if any: an assigned
 /// `RUSTFLAGS` keeps the caller's own flags and restates the frontend flag on a
-/// nightly pin, and mold on Linux.
+/// nightly pin, and mold on Linux. A direct Whitaker command is the exception:
+/// its installer-managed toolchain must not inherit the development flags, so
+/// it assigns the warning policy alone (see [`isolated_problem`]).
 pub fn development_problem(
     target: Target<'_>,
     host: Host,
     pin: Pin,
-    assignment: &Assignment,
+    command: &Command,
 ) -> Option<String> {
-    let (flags, inherits) = match assignment {
-        Assignment::Flags(flags, inherits) => (flags, inherits),
-        Assignment::Bare(command) => return Some(bare_problem(target, host, command)),
+    let isolated = tool_key(&command.text).as_deref() == Some("whitaker");
+    let (flags, inherits) = match &command.assignment {
+        Assignment::Flags(flags, inherits) => (flags, *inherits),
+        Assignment::Bare(text) => return Some(bare_problem(target, host, text)),
         Assignment::Unassigned => return None,
     };
+    if isolated {
+        return isolated_problem(target, host, flags, inherits);
+    }
     if !inherits {
         return Some(format!(
             "`make {target}` on {} drops the caller's RUSTFLAGS",
@@ -226,7 +256,7 @@ pub fn development_problems_expecting(
         problems.extend(
             commands
                 .iter()
-                .filter_map(|command| development_problem(target, host, pin, &command.assignment)),
+                .filter_map(|command| development_problem(target, host, pin, command)),
         );
         problems.extend(test_policy_problems(target, host, &commands));
     }
