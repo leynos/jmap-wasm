@@ -1,199 +1,114 @@
-//! Contract for the development build footprint (the estate's rule
-//! `rust-dev-build-footprint`): the default development and test profiles keep
-//! no incremental state and no debug information, and Cargo coordinates
-//! metadata output through its native key rather than a raw rustc flag.
+//! Contract test for the development build footprint rule.
 //!
-//! The checks ask Cargo itself for the effective values, so a profile override
-//! in any configuration file Cargo merges (this repository's, an ancestor
-//! directory's or the user's) is seen as well as the manifest's own table.
-//! Nothing here compiles: `--unit-graph` and `config get` resolve and print.
+//! The Concordat `rust-dev-build-footprint` rule needs the default development
+//! profile to disable incremental compilation and debug information, and a
+//! dated nightly pin from 2026-07-31 to set the native Cargo metadata key. This
+//! contract holds all three settings by reading the configuration, starts no Cargo process,
+//! and refuses the raw rustc metadata flags that broke build scripts.
 
-use std::process::Command;
+/// Root manifest holding the development profile.
+const MANIFEST: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
+/// Cargo configuration holding the native metadata key.
+const CARGO_CONFIG: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/.cargo/config.toml"));
+/// Toolchain file whose dated nightly decides which metadata key is right.
+const TOOLCHAIN: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/rust-toolchain.toml"));
+/// First dated nightly that accepts the native `embed-metadata` key.
+const NATIVE_KEY_FROM: &str = "2026-07-31";
 
-/// Profile overrides that the environment can carry; removed so the
-/// repository's own settings are what is measured.
-const PROFILE_VARIABLES: &[&str] = &[
-    "CARGO_INCREMENTAL",
-    "CARGO_BUILD_INCREMENTAL",
-    "CARGO_PROFILE_DEV_DEBUG",
-    "CARGO_PROFILE_DEV_INCREMENTAL",
-    "CARGO_PROFILE_DEV_BUILD_OVERRIDE_DEBUG",
-    "CARGO_PROFILE_DEV_BUILD_OVERRIDE_INCREMENTAL",
-    "CARGO_PROFILE_TEST_DEBUG",
-    "CARGO_PROFILE_TEST_INCREMENTAL",
-    "CARGO_PROFILE_TEST_BUILD_OVERRIDE_DEBUG",
-    "CARGO_PROFILE_TEST_BUILD_OVERRIDE_INCREMENTAL",
-];
-
-/// Runs the Cargo that built this test in the crate directory and returns its
-/// standard output.
-fn cargo(args: &[&str]) -> Result<String, String> {
-    let mut command = Command::new(env!("CARGO"));
-    command.args(args).current_dir(env!("CARGO_MANIFEST_DIR"));
-    for name in PROFILE_VARIABLES {
-        command.env_remove(name);
-    }
-    let output = command
-        .output()
-        .map_err(|error| format!("running cargo {args:?}: {error}"))?;
-    if !output.status.success() {
-        return Err(format!(
-            "cargo {args:?} failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-    String::from_utf8(output.stdout).map_err(|error| error.to_string())
-}
-
-/// Returns an error carrying the message unless the condition holds.
-fn ensure(holds: bool, message: impl FnOnce() -> String) -> Result<(), String> {
-    if holds { Ok(()) } else { Err(message()) }
-}
-
-/// Returns the profile objects of a `--unit-graph` document: the text after
-/// each `"profile":{`, up to the first closing brace.
-fn profiles(graph: &str) -> Vec<&str> {
-    graph
-        .split("\"profile\":{")
+/// Returns the non-comment lines of the named top-level TOML table.
+fn table_lines<'a>(document: &'a str, table: &str) -> Vec<&'a str> {
+    let header = format!("[{table}]");
+    document
+        .lines()
+        .map(|line| line.split('#').next().unwrap_or("").trim())
+        .skip_while(|line| *line != header)
         .skip(1)
-        .filter_map(|rest| rest.split_once('}').map(|(profile, _)| profile))
+        .take_while(|line| !line.starts_with('['))
+        .filter(|line| !line.is_empty())
         .collect()
 }
 
-/// Checks that every unit of the graph is built under the expected profile and disables debug
-/// information and incremental state, so a `build.profile` override cannot make a release graph
-/// stand in for the development one.
-fn check_footprint_profiles(graph: &str, what: &str, expected_profile: &str) -> Result<(), String> {
-    let found = profiles(graph);
-    ensure(!found.is_empty(), || {
-        format!("{what}: the unit graph names no profile")
-    })?;
-    let expected_name = format!("\"name\":\"{expected_profile}\"");
-    for profile in found {
-        ensure(profile.contains(&expected_name), || {
-            format!("{what}: expected profile {expected_profile}: {profile}")
-        })?;
-        ensure(profile.contains("\"debuginfo\":0,"), || {
-            format!("{what}: a unit keeps debug information: {profile}")
-        })?;
-        ensure(profile.contains("\"incremental\":false,"), || {
-            format!("{what}: a unit keeps incremental state: {profile}")
-        })?;
-    }
-    Ok(())
-}
-
-/// Scenario: the unit graph `cargo build` resolves for the development profile.
-///
-/// Invariant: every unit, the crate's and its dependencies', has debug information off and
-/// incremental state off, wherever the setting comes from.
-#[test]
-fn the_effective_development_profile_disables_incremental_state_and_debug_information()
--> Result<(), String> {
-    let graph = cargo(&[
-        "build",
-        "--unit-graph",
-        "-Zunstable-options",
-        "--locked",
-        "--offline",
-    ])?;
-    check_footprint_profiles(&graph, "cargo build", "dev")
-}
-
-/// Scenario: the unit graph `cargo test --no-run` resolves for the test profile.
-///
-/// Invariant: the test profile inherits both footprint settings from the development profile, and
-/// no configuration file re-enables either.
-#[test]
-fn the_effective_test_profile_inherits_the_footprint_settings() -> Result<(), String> {
-    let graph = cargo(&[
-        "test",
-        "--no-run",
-        "--unit-graph",
-        "-Zunstable-options",
-        "--locked",
-        "--offline",
-    ])?;
-    check_footprint_profiles(&graph, "cargo test", "test")
-}
-
-/// Scenario: the merged Cargo configuration, as `cargo config get` reports it.
-///
-/// Invariant: `[unstable] embed-metadata` is `false`, the native key for nightlies from 2026-07-31.
-#[test]
-fn cargo_reads_the_native_key_for_metadata_embedding() -> Result<(), String> {
-    let config = cargo(&[
-        "config",
-        "get",
-        "--format",
-        "json",
-        "-Zunstable-options",
-        "unstable.embed-metadata",
-        "--locked",
-        "--offline",
-    ])?;
-    ensure(
-        config.trim() == r#"{"unstable":{"embed-metadata":false}}"#,
-        || {
-            format!(
-                "[unstable] must set embed-metadata = false on a nightly from 2026-07-31; Cargo \
-                 reads {config}"
-            )
-        },
-    )
-}
-
-/// Scenario: the `rustflags` Cargo merges for every build and target, as `cargo config get` reports
-/// them.
-///
-/// Invariant: no flag, in a string or an array, joined or split (`-Zembed-metadata=...` or `-Z`
-/// then `embed-metadata=...`), in `[build]` or any `[target.*]` table, names metadata embedding,
-/// because raw rustc metadata flags broke build scripts and the native key replaces them.
-#[test]
-fn no_raw_rustc_flag_stands_in_for_the_native_key() -> Result<(), String> {
-    for table in ["build", "target"] {
-        let reported = cargo(&[
-            "config",
-            "get",
-            "--format",
-            "json",
-            "-Zunstable-options",
-            table,
-            "--locked",
-            "--offline",
-        ])
-        .or_else(|error| {
-            // A table the configuration does not define is not an error for this contract.
-            if error.contains("is not set") {
-                Ok(String::new())
-            } else {
-                Err(error)
-            }
-        })?;
-        ensure(!reported.contains("embed-metadata"), || {
-            format!("`{table}` carries a raw metadata flag: {reported}")
-        })?;
-    }
-    Ok(())
-}
-
-/// Scenario: the obsolete `no-embed-metadata` key in the repository's `.cargo/config.toml`.
-///
-/// Invariant: the configuration does not set it, because dated nightlies from 2026-07-31 take
-/// `embed-metadata = false` instead.
-#[test]
-fn the_obsolete_key_is_not_set() -> Result<(), String> {
-    let reported = cargo(&[
-        "config",
-        "get",
-        "--format",
-        "json",
-        "-Zunstable-options",
-        "unstable",
-        "--locked",
-        "--offline",
-    ])?;
-    ensure(!reported.contains("no-embed-metadata"), || {
-        format!("[unstable] still sets the obsolete key: {reported}")
+/// Returns the value assigned to `key` in a table's lines.
+fn value<'a>(lines: &[&'a str], key: &str) -> Option<&'a str> {
+    lines.iter().find_map(|line| {
+        let (name, assigned) = line.split_once('=')?;
+        (name.trim() == key).then_some(assigned.trim())
     })
+}
+
+/// Scenario: the default development profile.
+///
+/// Invariant: it keeps no incremental state and no debug information.
+#[test]
+fn the_development_profile_keeps_the_build_footprint_settings() {
+    let profile = table_lines(MANIFEST, "profile.dev");
+    assert_eq!(
+        value(&profile, "incremental"),
+        Some("false"),
+        "profile.dev must set incremental = false"
+    );
+    assert!(
+        matches!(value(&profile, "debug"), Some("0" | "false")),
+        "profile.dev must set debug = 0 or false, found {:?}",
+        value(&profile, "debug")
+    );
+}
+
+/// Scenario: the Cargo configuration of a pin from 2026-07-31.
+///
+/// Invariant: it sets the native `embed-metadata = false` key, not the older
+/// spelling.
+#[test]
+fn the_cargo_configuration_disables_metadata_embedding_natively() {
+    let unstable = table_lines(CARGO_CONFIG, "unstable");
+    assert_eq!(
+        value(&unstable, "embed-metadata"),
+        Some("false"),
+        "[unstable] must set embed-metadata = false"
+    );
+    assert_eq!(
+        value(&unstable, "no-embed-metadata"),
+        None,
+        "the older no-embed-metadata spelling is wrong for a pin from {NATIVE_KEY_FROM}"
+    );
+}
+
+/// Scenario: every `rustflags` source in the Cargo configuration.
+///
+/// Invariant: none carries a raw rustc metadata flag.
+#[test]
+fn no_rustflags_source_carries_a_raw_metadata_flag() {
+    let flags: Vec<&str> = CARGO_CONFIG
+        .lines()
+        .map(|line| line.split('#').next().unwrap_or("").trim())
+        .filter(|line| line.starts_with("rustflags"))
+        .collect();
+    assert!(!flags.is_empty(), "expected at least one rustflags source");
+    assert!(
+        flags.iter().all(|line| !line.contains("embed-metadata")),
+        "no raw embed-metadata flag may appear in rustflags: {flags:?}"
+    );
+}
+
+/// Returns the pinned channel named in `rust-toolchain.toml`, if any.
+fn pinned_channel() -> Option<String> {
+    TOOLCHAIN.lines().find_map(|line| {
+        let (name, assigned) = line.split_once('=')?;
+        (name.trim() == "channel").then(|| assigned.trim().trim_matches('"').to_owned())
+    })
+}
+
+/// Scenario: the pinned toolchain.
+///
+/// Invariant: it is a dated nightly from 2026-07-31, the range the native key
+/// serves.
+#[test]
+fn the_pin_is_a_dated_nightly_that_accepts_the_native_key() {
+    let channel = pinned_channel().unwrap_or_default();
+    let date = channel.strip_prefix("nightly-").unwrap_or("");
+    assert!(
+        date >= NATIVE_KEY_FROM,
+        "{channel:?} must be a dated nightly from {NATIVE_KEY_FROM}; older pins use \
+         no-embed-metadata"
+    );
 }

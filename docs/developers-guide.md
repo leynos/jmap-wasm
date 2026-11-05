@@ -48,10 +48,10 @@ Exception: Cranelift is not the development-profile backend, because the
 repository has no test suite to measure it with. The estate adopts the backend
 only where the full suite passes under it, and a build alone proves nothing
 about miscompilation or unwinding (recorded 2026-09-29, on the pinned
-`nightly-2026-06-05`). The pin is now `nightly-2026-10-30`; the repository
-still has no test suite, so no measurement was taken on it and the exception
-stands without a deferral date. Revisit when the repository has tests: measure
-the whole suite under the backend and adopt it if every test passes.
+`nightly-2026-06-05`). The repository still has no test suite, so no later
+measurement was taken and the exception stands without a deferral date. Revisit
+when the repository has tests: measure the whole suite under the backend and
+adopt it if every test passes.
 
 ## Development build footprint
 
@@ -67,10 +67,9 @@ development build and every rebuild recompiles whole crates. To debug, run with
 2026-07-31, so Cargo coordinates metadata output itself. No raw rustc metadata
 flags are used, and the pin is not moved to suit the key. Whoever moves the pin
 across a boundary of the rule must switch the key to match the new pin family.
-`tests/footprint_contract.rs` asks Cargo itself (`--unit-graph` and
-`config get`, which compile nothing) for the effective profiles and the key, so
-an override in any configuration file Cargo merges is caught as well as the
-manifest's own table.
+`tests/footprint_contract.rs` reads the manifest, the Cargo configuration and
+the toolchain file as text, starts no Cargo process, and holds all three
+settings and the absence of raw metadata flags.
 
 ## The spelling gate
 
