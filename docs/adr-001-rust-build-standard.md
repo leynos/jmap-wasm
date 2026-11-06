@@ -68,3 +68,10 @@ are not meant for. The trade-off is that a caller's extra flags do not reach
 Whitaker. The footprint settings (`incremental = false`, `debug = 0` and the
 native `embed-metadata` key) are read as text by `tests/footprint_contract.rs`,
 which starts no Cargo process.
+
+The footprint trade-offs: an unincremental build recompiles the whole crate on
+each edit, in exchange for a `target/` directory that does not grow with every
+change; `debug = 0` leaves a debugger without symbols for dependencies and this
+crate unless the developer sets `CARGO_PROFILE_DEV_DEBUG=true`; and the native
+`embed-metadata = false` key ties the configuration to dated nightlies from
+2026-07-31.

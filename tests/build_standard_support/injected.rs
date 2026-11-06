@@ -135,6 +135,15 @@ fn inheriting_whitaker_make(target: Target<'_>, host: Host) -> Result<String, St
     )
 }
 
+/// A fake runner whose Whitaker command inherits the caller's `RUSTFLAGS` by direct expansion.
+fn direct_inheriting_whitaker_make(target: Target<'_>, host: Host) -> Result<String, String> {
+    whitaker_line_make(
+        target,
+        host,
+        "RUSTFLAGS=\"$RUSTFLAGS -D warnings\" whitaker --all",
+    )
+}
+
 /// A fake runner whose Whitaker command assigns an empty `RUSTFLAGS`, dropping the warning policy.
 fn empty_whitaker_make(target: Target<'_>, host: Host) -> Result<String, String> {
     whitaker_line_make(target, host, "RUSTFLAGS=\"\" whitaker --all")
@@ -335,6 +344,10 @@ fn a_direct_whitaker_command_must_stay_isolated_from_the_development_flags() -> 
             "development flags",
         ),
         (inheriting_whitaker_make, "inherit the caller's RUSTFLAGS"),
+        (
+            direct_inheriting_whitaker_make,
+            "inherit the caller's RUSTFLAGS",
+        ),
         (empty_whitaker_make, "without -D warnings"),
     ];
     for (runner, reason) in refused {
