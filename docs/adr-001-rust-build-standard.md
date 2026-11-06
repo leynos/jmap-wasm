@@ -58,3 +58,20 @@ the workflows, so a flag lost through a recipe or workflow edit fails there.
 - A change to a recipe or workflow step that assigns `RUSTFLAGS` must restate
   the flags, and the contract says which clause fails when it does not.
 - Revisit Cranelift when the toolchain or the failing tests change.
+
+## Addendum: Whitaker and the development footprint
+
+The direct Whitaker command is exempt from the development flags and from the
+caller's `RUSTFLAGS`: it assigns `-D warnings` only. Whitaker runs on its
+installer-managed toolchain, which the frontend flag and the `mold` argument
+are not meant for. The trade-off is that a caller's extra flags do not reach
+Whitaker. The estate's `rust-dev-build-footprint` rule checks the footprint
+settings (`incremental = false`, `debug = 0` and the native `embed-metadata`
+key).
+
+The footprint trade-offs: an unincremental build recompiles the whole crate on
+each edit, in exchange for a `target/` directory that does not grow with every
+change; `debug = 0` leaves a debugger without symbols for dependencies and this
+crate unless the developer sets `CARGO_PROFILE_DEV_DEBUG=true`; and the native
+`embed-metadata = false` key ties the configuration to dated nightlies from
+2026-07-31.
