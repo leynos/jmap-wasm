@@ -1,7 +1,9 @@
 //! The development half of the Makefile reader: the commands `make -n` prints for each development
 //! target, judged against a toolchain pin and a host. Each command must assign `RUSTFLAGS` with the
 //! standard flags and keep the caller's own, the commands that run tests must keep `-D warnings`, and
-//! each target must run the tools the contract recorded for it.
+//! each target must run the tools the contract recorded for it. The exception is the direct Whitaker
+//! command: its installer-managed toolchain takes none of the development flags and none of the
+//! caller's, so it must assign the warning policy alone.
 
 use super::{
     config::{Flags, Pin, Problems},

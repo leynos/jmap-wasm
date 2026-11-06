@@ -116,6 +116,27 @@ fn isolated_whitaker_make(target: Target<'_>, host: Host) -> Result<String, Stri
     whitaker_line_make(target, host, "RUSTFLAGS=\"-D warnings\" whitaker --all")
 }
 
+/// A fake runner whose Whitaker command carries the frontend flag alone.
+fn frontend_whitaker_make(target: Target<'_>, host: Host) -> Result<String, String> {
+    whitaker_line_make(
+        target,
+        host,
+        &format!("RUSTFLAGS=\"-D warnings {THREADS_FLAG}\" whitaker --all"),
+    )
+}
+
+/// A fake runner whose Whitaker command carries the linker flag alone.
+fn linker_whitaker_make(target: Target<'_>, host: Host) -> Result<String, String> {
+    whitaker_line_make(
+        target,
+        host,
+        &format!(
+            "RUSTFLAGS=\"-D warnings{}\" whitaker --all",
+            linker_flag(host)
+        ),
+    )
+}
+
 /// A fake runner whose Whitaker command carries the development flags.
 fn contaminated_whitaker_make(target: Target<'_>, host: Host) -> Result<String, String> {
     let flags = format!("-D warnings {THREADS_FLAG}{}", linker_flag(host));
@@ -343,6 +364,8 @@ fn a_direct_whitaker_command_must_stay_isolated_from_the_development_flags() -> 
             contaminated_whitaker_make as MakeRunner,
             "development flags",
         ),
+        (frontend_whitaker_make, "development flags"),
+        (linker_whitaker_make, "development flags"),
         (inheriting_whitaker_make, "inherit the caller's RUSTFLAGS"),
         (
             direct_inheriting_whitaker_make,

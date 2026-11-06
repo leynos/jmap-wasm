@@ -57,7 +57,8 @@ measure the whole suite under the backend and adopt it if every test passes.
 
 ### Whitaker exception
 
-The direct Whitaker command assigns `RUSTFLAGS` the warning policy alone and
+The direct Whitaker command assigns `RUSTFLAGS` the warning policy alone, after
+clearing `CARGO_ENCODED_RUSTFLAGS` (which Cargo ranks above `RUSTFLAGS`), and
 none of the caller's flags. Whitaker builds its own pinned toolchain through
 the installer; the frontend flag and the `mold` link argument are for this
 repository's pinned nightly, and handing them over makes the build fail or

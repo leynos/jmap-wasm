@@ -15,12 +15,43 @@ const TOOLCHAIN: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/rust-
 /// First dated nightly that accepts the native `embed-metadata` key.
 const NATIVE_KEY_FROM: &str = "2026-07-31";
 
+/// Returns a TOML line without its trailing comment: a `#` inside a quoted string does not start one.
+fn strip_comment(line: &str) -> &str {
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    for (index, ch) in line.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        match quote {
+            Some('"') if ch == '\\' => escaped = true,
+            Some(open) if ch == open => quote = None,
+            None if ch == '"' || ch == '\'' => quote = Some(ch),
+            None if ch == '#' => return line.split_at(index).0,
+            Some(_) | None => {}
+        }
+    }
+    line
+}
+
+/// Scenario: comments after values, and a `#` inside a quoted value.
+///
+/// Invariant: only a `#` outside quotes starts a comment.
+#[test]
+fn comments_are_stripped_but_quoted_hashes_are_kept() {
+    assert_eq!(strip_comment("a = 1 # note"), "a = 1 ");
+    assert_eq!(strip_comment("a = \"x # y\" # note"), "a = \"x # y\" ");
+    assert_eq!(strip_comment("a = 'x # y'"), "a = 'x # y'");
+    assert_eq!(strip_comment("a = \"q\\\" # y\""), "a = \"q\\\" # y\"");
+}
+
 /// Returns the non-comment lines of the named top-level TOML table.
 fn table_lines<'a>(document: &'a str, table: &str) -> Vec<&'a str> {
     let header = format!("[{table}]");
     document
         .lines()
-        .map(|line| line.split('#').next().unwrap_or("").trim())
+        .map(|line| strip_comment(line).trim())
         .skip_while(|line| *line != header)
         .skip(1)
         .take_while(|line| !line.starts_with('['))
@@ -90,7 +121,7 @@ fn no_rustflags_source_carries_a_raw_metadata_flag() {
     let mut offenders: Vec<&str> = Vec::new();
     for line in CARGO_CONFIG
         .lines()
-        .map(|line| line.split('#').next().unwrap_or("").trim())
+        .map(|line| strip_comment(line).trim())
         .filter(|line| !line.is_empty())
     {
         if line.starts_with('[') {
