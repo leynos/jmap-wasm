@@ -73,20 +73,35 @@ fn the_cargo_configuration_disables_metadata_embedding_natively() {
     );
 }
 
-/// Scenario: every `rustflags` source in the Cargo configuration.
+/// Returns whether a configuration line mentions metadata embedding anywhere but the native key.
+fn is_raw_metadata_flag(line: &str, in_unstable: bool) -> bool {
+    let native = in_unstable && line.starts_with("embed-metadata");
+    line.contains("embed-metadata") && !native
+}
+
+/// Scenario: the whole Cargo configuration, whatever shape its `rustflags` take.
 ///
-/// Invariant: none carries a raw rustc metadata flag.
+/// Invariant: no line outside the native `[unstable]` key mentions metadata embedding, so a raw
+/// rustc flag cannot hide in a single-line or multiline `rustflags` array or in a `[target.*]`
+/// table.
 #[test]
 fn no_rustflags_source_carries_a_raw_metadata_flag() {
-    let flags: Vec<&str> = CARGO_CONFIG
+    let mut in_unstable = false;
+    let mut offenders: Vec<&str> = Vec::new();
+    for line in CARGO_CONFIG
         .lines()
         .map(|line| line.split('#').next().unwrap_or("").trim())
-        .filter(|line| line.starts_with("rustflags"))
-        .collect();
-    assert!(!flags.is_empty(), "expected at least one rustflags source");
+        .filter(|line| !line.is_empty())
+    {
+        if line.starts_with('[') {
+            in_unstable = line == "[unstable]";
+        } else if is_raw_metadata_flag(line, in_unstable) {
+            offenders.push(line);
+        }
+    }
     assert!(
-        flags.iter().all(|line| !line.contains("embed-metadata")),
-        "no raw embed-metadata flag may appear in rustflags: {flags:?}"
+        offenders.is_empty(),
+        "no raw embed-metadata flag may appear outside [unstable]: {offenders:?}"
     );
 }
 

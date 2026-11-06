@@ -146,6 +146,10 @@ fn flags(words: &[&str], inherits: bool) -> Assignment {
     Fixture("RUSTFLAGS=\"${RUSTFLAGS-} -Zthreads=8\" cargo check"),
     flags(&[THREADS_FLAG], true)
 )]
+#[case::direct_expansion(
+    Fixture("RUSTFLAGS=\"$RUSTFLAGS -D warnings\" cargo clippy"),
+    flags(&["$RUSTFLAGS", "-D", "warnings"], true)
+)]
 #[case::no_assignment(Fixture("cargo clippy --all-targets"), Assignment::Unassigned)]
 fn the_command_reader_reads_each_assignment(
     #[case] line: Fixture,

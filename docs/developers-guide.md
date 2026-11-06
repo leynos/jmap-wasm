@@ -50,8 +50,20 @@ only where the full suite passes under it, and a build alone proves nothing
 about miscompilation or unwinding (recorded 2026-09-29, on the pinned
 `nightly-2026-06-05`). The repository still has no test suite, so no later
 measurement was taken and the exception stands without a deferral date. Revisit
-when the repository has tests: measure the whole suite under the backend and
-adopt it if every test passes.
+when the repository has a suite that exercises generated code: the Rust
+contract tests here read configuration and measure nothing about miscompilation
+or unwinding, so a representative behavioural suite is required first. Then
+measure the whole suite under the backend and adopt it if every test passes.
+
+### Whitaker exception
+
+The direct Whitaker command assigns `RUSTFLAGS` the warning policy alone and
+none of the caller's flags. Whitaker builds its own pinned toolchain through
+the installer; the frontend flag and the `mold` link argument are for this
+repository's pinned nightly, and handing them over makes the build fail or
+drift. The cost is that a caller's extra flags do not reach Whitaker. The
+contract rejects a recipe that inherits `RUSTFLAGS` in any expansion. The
+decision is recorded in ADR 001.
 
 ## Development build footprint
 
