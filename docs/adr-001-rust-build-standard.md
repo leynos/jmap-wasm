@@ -65,9 +65,9 @@ The direct Whitaker command is exempt from the development flags and from the
 caller's `RUSTFLAGS`: it assigns `-D warnings` only. Whitaker runs on its
 installer-managed toolchain, which the frontend flag and the `mold` argument
 are not meant for. The trade-off is that a caller's extra flags do not reach
-Whitaker. The footprint settings (`incremental = false`, `debug = 0` and the
-native `embed-metadata` key) are read as text by `tests/footprint_contract.rs`,
-which starts no Cargo process.
+Whitaker. The estate's `rust-dev-build-footprint` rule checks the footprint
+settings (`incremental = false`, `debug = 0` and the native `embed-metadata`
+key).
 
 The footprint trade-offs: an unincremental build recompiles the whole crate on
 each edit, in exchange for a `target/` directory that does not grow with every
