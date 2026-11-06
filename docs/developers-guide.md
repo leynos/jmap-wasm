@@ -17,8 +17,8 @@ recipes that set it compose the standard's flags onto any inherited value (CI's
 `setup-rust` exports one). The `lint` recipe's Whitaker command is a deliberate
 exception: Whitaker runs on its installer-managed toolchain, which must not
 inherit the repository's development flags, so it assigns
-`RUSTFLAGS="$(RUST_FLAGS)"` (`-D warnings`) alone, keeps none of the caller's
-flags and takes neither `-Zthreads=8` nor `mold`, while Clippy in the same
+the literal `RUSTFLAGS="-D warnings"` alone, keeps none of the caller's
+flags (it clears `CARGO_ENCODED_RUSTFLAGS` first) and takes neither `-Zthreads=8` nor `mold`, while Clippy in the same
 recipe keeps the standard's flags. Two builds are also deliberately excluded:
 coverage assigns `RUSTFLAGS` without the fast flags, because a measurement
 should not depend on them, and the release recipe and workflow keep the
