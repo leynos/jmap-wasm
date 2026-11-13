@@ -38,8 +38,8 @@ workflows (each must pass `install-mold`), so a flag lost through a recipe or
 workflow edit fails there. For Whitaker the contract runs the other way: a
 Whitaker command that carries a development flag, inherits the caller's flags,
 drops `-D warnings`, or assigns nothing fails. The decision is recorded in
-[ADR 001](adr-001-rust-build-standard.md). The contract runs `make -n`, so a
-direct `cargo test` needs GNU make on the `PATH`. It fails when `make` is
+[ADR 001](adrs/adr-0001-rust-build-standard.md). The contract runs `make -n`,
+so a direct `cargo test` needs GNU make on the `PATH`. It fails when `make` is
 missing instead of skipping, so a missing tool cannot read as a pass.
 
 ### Cranelift
