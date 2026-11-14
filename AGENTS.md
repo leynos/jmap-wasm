@@ -67,7 +67,7 @@
   the PR or execution record.
 - **Decision history:** Preserve accepted ADR decisions; record subsequent
   changes through the
-  [ADR amendment and supersession process](docs/documentation-style-guide.md#architectural-decision-records-adrs).
+  [ADR amendment process](docs/documentation-style-guide.md#architectural-decision-records-adrs).
   Capture proof-driven API, representation, and invariant decisions in the
   design documentation.
 - **Completed execplans:** Completed execplans are historical documents and
@@ -165,8 +165,7 @@
   2. Document the new abstraction's intended scope and re-use policy
      (ownership boundaries, permitted call-sites, and composition rules).
   3. Record the decision in the appropriate architecture, design, or
-     developers-guide document using `docs/contents.md` as the index to select
-     the correct location.
+     developers-guide document in `docs/`.
 - **Post-Commit Review:** After committing a functional change or bug fix (that
   meets all quality gates), review the changed code and surrounding areas using
   the heuristics above.
