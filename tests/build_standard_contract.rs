@@ -29,6 +29,8 @@ mod fixtures;
 mod injected;
 #[path = "build_standard_support/injected_held_out.rs"]
 mod injected_held_out;
+#[path = "build_standard_support/injected_whitaker.rs"]
+mod injected_whitaker;
 #[path = "build_standard_support/make.rs"]
 mod make;
 #[path = "build_standard_support/process.rs"]
