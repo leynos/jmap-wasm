@@ -67,6 +67,16 @@ drift. The cost is that a caller's extra flags do not reach Whitaker. The
 contract rejects a recipe that inherits `RUSTFLAGS` in any expansion. The
 decision is recorded in ADR 001.
 
+## Cognitive complexity
+
+Cognitive complexity is not gated by Clippy. Clippy's `cognitive_complexity`
+scores code after macro expansion, so it counts branching a macro generated,
+and neither `Cargo.toml` nor `clippy.toml` enables it. Whitaker's experimental
+`macro_aware_cognitive_complexity` gates it at `max_complexity = 9`,
+CodeScene's ceiling. `dylint.toml` opts in with
+`[whitaker] experimental = ["macro_aware_cognitive_complexity"]`. Fix a finding
+by extracting named helpers, never by raising the threshold.
+
 ## Development build footprint
 
 The repository follows the estate's `rust-dev-build-footprint` rule.
